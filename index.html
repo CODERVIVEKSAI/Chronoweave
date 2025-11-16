@@ -5599,8 +5599,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             console.log('DOM loaded');
             
-            // Check for auto-login
-            checkAutoLogin();
+            // Auto-login is handled by auth.onAuthStateChanged() above
             
             // Show login form by default
             showLoginForm();
