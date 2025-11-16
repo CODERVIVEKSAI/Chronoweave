@@ -6,7 +6,13 @@
     <title>Chronoweave - Competitive Textile Challenge</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <style>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    
+    <style></style>
         * {
             margin: 0;
             padding: 0;
@@ -2771,6 +2777,23 @@
     <script>
         console.log('Chronoweave loaded');
         
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyA_9igAEZ0bbNrK27W5tKUapijn2HJdCq4",
+            authDomain: "chronoweave-53e06.firebaseapp.com",
+            projectId: "chronoweave-53e06",
+            storageBucket: "chronoweave-53e06.firebasestorage.app",
+            messagingSenderId: "127960888564",
+            appId: "1:127960888564:web:871a8ae8c78c0062941aa1"
+        };
+        
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        
+        console.log('Firebase initialized successfully!');
+        
         // Game state
         let playerData = {
             email: '',
@@ -3402,10 +3425,16 @@
             localStorage.setItem(STORAGE_KEY, JSON.stringify(players));
         }
         
-        function savePlayerData() {
-            // Save current player data
-            if (playerData && playerData.email) {
-                savePlayer(playerData.email, playerData);
+        async function savePlayerData() {
+            // Save current player data to Firebase
+            const user = auth.currentUser;
+            if (user && playerData) {
+                try {
+                    await db.collection('users').doc(user.uid).update(playerData);
+                    console.log('Player data saved to Firebase');
+                } catch (error) {
+                    console.error('Error saving player data:', error);
+                }
             }
         }
         
@@ -3442,7 +3471,7 @@
         }
         
         // Registration
-        function registerNewPlayer() {
+        async function registerNewPlayer() {
             playSound('click');
             
             const email = document.getElementById('register-email').value.trim().toLowerCase();
@@ -3469,47 +3498,58 @@
                 return;
             }
             
-            // Check if email already exists
-            if (getPlayer(email)) {
+            try {
+                // Create Firebase user
+                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+                
+                console.log('Firebase user created:', user.uid);
+                
+                // Create player data
+                const newPlayer = {
+                    uid: user.uid,
+                    email: email,
+                    name: name,
+                    level: level,
+                    rank: Math.floor(Math.random() * 500) + 50,
+                    totalScore: 0,
+                    coins: 0,
+                    challenges: {
+                        heritage: { best: 0, completed: false },
+                        innovation: { best: 0, completed: false },
+                        future: { best: 0, completed: false }
+                    },
+                    createdAt: new Date().toISOString(),
+                    lastPlayed: new Date().toISOString()
+                };
+                
+                // Save to Firestore
+                await db.collection('users').doc(user.uid).set(newPlayer);
+                console.log('Player data saved to Firestore');
+                
+                // Load player data
+                playerData = { ...newPlayer };
+                
+                playSound('success');
+                alert(`Welcome to Chronoweave, ${name}! Your account has been created.`);
+                showDashboard();
+                startBackgroundMusic();
+                
+            } catch (error) {
+                console.error('Registration error:', error);
                 playSound('error');
-                alert('This email is already registered! Please login instead.');
-                showLoginForm();
-                return;
+                
+                if (error.code === 'auth/email-already-in-use') {
+                    alert('This email is already registered! Please login instead.');
+                    showLoginForm();
+                } else {
+                    alert('Registration failed: ' + error.message);
+                }
             }
-            
-            // Create new player
-            const newPlayer = {
-                email: email,
-                name: name,
-                password: password, // In production, this should be hashed!
-                level: level,
-                rank: Math.floor(Math.random() * 500) + 50,
-                totalScore: 0,
-                coins: 0,
-                challenges: {
-                    heritage: { best: 0, completed: false },
-                    innovation: { best: 0, completed: false },
-                    future: { best: 0, completed: false }
-                },
-                createdAt: new Date().toISOString(),
-                lastPlayed: new Date().toISOString()
-            };
-            
-            // Save to localStorage
-            savePlayer(email, newPlayer);
-            saveCurrentUser(email);
-            
-            // Load player data
-            playerData = { ...newPlayer };
-            
-            playSound('success');
-            alert(`Welcome to Chronoweave, ${name}! Your account has been created.`);
-            showDashboard();
-            startBackgroundMusic();
         }
         
         // Login
-        function loginPlayer() {
+        async function loginPlayer() {
             playSound('click');
             
             const email = document.getElementById('login-email').value.trim().toLowerCase();
@@ -3521,43 +3561,62 @@
                 return;
             }
             
-            const player = getPlayer(email);
-            
-            if (!player) {
+            try {
+                // Sign in with Firebase
+                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+                
+                console.log('Firebase user logged in:', user.uid);
+                
+                // Get player data from Firestore
+                const doc = await db.collection('users').doc(user.uid).get();
+                
+                if (doc.exists) {
+                    const player = doc.data();
+                    
+                    // Update last played
+                    player.lastPlayed = new Date().toISOString();
+                    await db.collection('users').doc(user.uid).update({ lastPlayed: player.lastPlayed });
+                    
+                    // Load player data
+                    playerData = { ...player };
+                    
+                    playSound('success');
+                    alert(`Welcome back, ${player.name}!`);
+                    showDashboard();
+                    startBackgroundMusic();
+                } else {
+                    playSound('error');
+                    alert('Player data not found. Please contact support.');
+                }
+                
+            } catch (error) {
+                console.error('Login error:', error);
                 playSound('error');
-                alert('No account found with this email. Please register first!');
-                showRegisterForm();
-                return;
+                
+                if (error.code === 'auth/user-not-found') {
+                    alert('No account found with this email. Please register first!');
+                    showRegisterForm();
+                } else if (error.code === 'auth/wrong-password') {
+                    alert('Incorrect password! Please try again.');
+                } else {
+                    alert('Login failed: ' + error.message);
+                }
             }
-            
-            if (player.password !== password) {
-                playSound('error');
-                alert('Incorrect password! Please try again.');
-                return;
-            }
-            
-            // Update last played
-            player.lastPlayed = new Date().toISOString();
-            savePlayer(email, player);
-            saveCurrentUser(email);
-            
-            // Load player data
-            playerData = { ...player };
-            
-            playSound('success');
-            alert(`Welcome back, ${player.name}!`);
-            showDashboard();
-            startBackgroundMusic();
         }
         
         // Auto-login if user is already logged in
-        function checkAutoLogin() {
-            const currentEmail = getCurrentUser();
-            if (currentEmail) {
-                const player = getPlayer(currentEmail);
-                if (player) {
-                    playerData = { ...player };
-                    showDashboard();
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                console.log('User already logged in:', user.uid);
+                try {
+                    const doc = await db.collection('users').doc(user.uid).get();
+                    if (doc.exists) {
+                        playerData = { ...doc.data() };
+                        showDashboard();
+                    }
+                } catch (error) {
+                    console.error('Auto-login error:', error);
                 }
             }
         }
@@ -3627,15 +3686,18 @@
             alert('✓ Progress saved successfully!');
         }
         
-        function logoutPlayer() {
+        async function logoutPlayer() {
             if (confirm('Are you sure you want to logout? Make sure your progress is saved!')) {
                 // Save before logout
-                if (playerData.email) {
-                    playerData.lastPlayed = new Date().toISOString();
-                    savePlayer(playerData.email, playerData);
-                }
+                await savePlayerData();
                 
-                clearCurrentUser();
+                // Sign out from Firebase
+                try {
+                    await auth.signOut();
+                    console.log('User logged out');
+                } catch (error) {
+                    console.error('Logout error:', error);
+                }
                 
                 // Reset player data
                 playerData = {
