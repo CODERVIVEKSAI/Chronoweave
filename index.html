@@ -4,13 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chronoweave - Competitive Textile Challenge</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <!-- Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <style>
         * {
@@ -19,21 +18,97 @@
             box-sizing: border-box;
         }
         
+        /* Performance optimizations */
+        .challenge-card, .grid-cell, .quiz-option {
+            will-change: transform;
+            backface-visibility: hidden;
+        }
+        
+        /* Reduce animation complexity for better performance */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+        
         body {
             font-family: 'Orbitron', monospace;
             background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
             color: #ffffff;
             min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                radial-gradient(circle at 20% 30%, rgba(0, 212, 255, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(255, 107, 107, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(78, 205, 196, 0.05) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+            animation: backgroundPulse 10s ease-in-out infinite;
+        }
+        
+        @keyframes backgroundPulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+        
+        .screen, .container {
+            position: relative;
+            z-index: 1;
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 12px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #00d4ff, #4ecdc4);
+            border-radius: 10px;
+            border: 2px solid rgba(0, 0, 0, 0.3);
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg, #4ecdc4, #00d4ff);
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
         }
         
         .screen {
             display: none;
             min-height: 100vh;
             padding: 2rem;
+            animation: screenFadeIn 0.5s ease-out;
         }
         
         .screen.active {
             display: block;
+        }
+        
+        @keyframes screenFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
         
         .container {
@@ -42,41 +117,82 @@
         }
         
         .registration-form {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(20px);
-            border-radius: 20px;
-            padding: 3rem;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+            backdrop-filter: blur(25px);
+            border-radius: 25px;
+            padding: 2.5rem 4rem;
             text-align: center;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            max-width: 600px;
-            margin: 10vh auto;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            max-width: 700px;
+            width: 90%;
+            margin: 3vh auto;
+            max-height: 94vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+            animation: formFloat 3s ease-in-out infinite;
+        }
+        
+        @keyframes formFloat {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
         }
         
         .main-title {
-            font-size: 3rem;
+            font-size: 3.5rem;
             font-weight: 700;
-            background: linear-gradient(45deg, #00d4ff, #ff6b6b, #4ecdc4);
-            background-size: 200% 200%;
+            background: linear-gradient(45deg, #00d4ff, #ff6b6b, #4ecdc4, #ffd700);
+            background-size: 300% 300%;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            animation: gradientShift 3s ease-in-out infinite;
-            margin-bottom: 1rem;
+            background-clip: text;
+            animation: gradientShift 4s ease-in-out infinite;
+            margin-bottom: 0.8rem;
+            letter-spacing: 3px;
+            text-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
+            filter: drop-shadow(0 0 20px rgba(0, 212, 255, 0.5));
         }
         
         .subtitle {
             color: #a0a0a0;
-            margin-bottom: 2rem;
+            margin-bottom: 1.5rem;
+            font-size: 1.1rem;
+            letter-spacing: 1px;
+            animation: subtitleFade 2s ease-in-out infinite;
+        }
+        
+        @keyframes subtitleFade {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 1; }
         }
         
         input, select {
             width: 100%;
-            padding: 1rem;
-            margin: 1rem 0;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
+            padding: 1.1rem 1.5rem;
+            margin: 0;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.12));
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
             color: #ffffff;
             font-family: inherit;
+            font-size: 1rem;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            backdrop-filter: blur(10px);
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: #00d4ff;
+            background: linear-gradient(135deg, rgba(0, 212, 255, 0.15), rgba(0, 212, 255, 0.1));
+            box-shadow: 0 0 25px rgba(0, 212, 255, 0.4), inset 0 0 15px rgba(0, 212, 255, 0.1);
+            transform: translateY(-2px);
+        }
+        
+        input:hover, select:hover {
+            border-color: rgba(0, 212, 255, 0.5);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.15));
         }
         
         input::placeholder {
@@ -85,16 +201,40 @@
         
         .enter-btn, .game-btn {
             padding: 1rem 2rem;
-            background: linear-gradient(45deg, #00d4ff, #4ecdc4);
+            background: linear-gradient(135deg, #00d4ff, #4ecdc4, #00d4ff);
+            background-size: 200% 200%;
             border: none;
-            border-radius: 10px;
+            border-radius: 12px;
             color: #000;
             font-family: inherit;
             font-weight: 700;
             font-size: 1.1rem;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             margin: 0.5rem;
+            position: relative;
+            z-index: 100;
+            pointer-events: auto;
+            box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+            overflow: hidden;
+        }
+        
+        .enter-btn::before, .game-btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+        
+        .enter-btn:hover::before, .game-btn:hover::before {
+            width: 300px;
+            height: 300px;
         }
         
         .enter-btn {
@@ -102,12 +242,14 @@
         }
         
         .enter-btn:hover, .game-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(0, 212, 255, 0.3);
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 15px 40px rgba(0, 212, 255, 0.5);
+            background-position: 100% 50%;
         }
         
         .enter-btn:active, .game-btn:active {
-            transform: translateY(0px);
+            transform: translateY(-1px) scale(0.98);
+            box-shadow: 0 5px 20px rgba(0, 212, 255, 0.4);
         }
         
         .dashboard {
@@ -115,31 +257,62 @@
         }
         
         .welcome-message {
-            font-size: 2rem;
+            font-size: 2.5rem;
             margin-bottom: 2rem;
             color: #00d4ff;
+            text-shadow: 0 0 30px rgba(0, 212, 255, 0.6);
+            animation: welcomePulse 3s ease-in-out infinite;
+        }
+        
+        @keyframes welcomePulse {
+            0%, 100% { 
+                text-shadow: 0 0 30px rgba(0, 212, 255, 0.6);
+                transform: scale(1);
+            }
+            50% { 
+                text-shadow: 0 0 40px rgba(0, 212, 255, 0.8), 0 0 60px rgba(0, 212, 255, 0.4);
+                transform: scale(1.02);
+            }
         }
         
         .player-stats {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 2rem;
-            border-radius: 15px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.12));
+            padding: 2.5rem;
+            border-radius: 20px;
             margin-bottom: 2rem;
             display: flex;
             justify-content: space-around;
             flex-wrap: wrap;
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(15px);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
         }
         
         .stat {
             text-align: center;
             margin: 1rem;
+            padding: 1rem;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+        
+        .stat:hover {
+            background: rgba(0, 212, 255, 0.1);
+            transform: translateY(-3px);
         }
         
         .stat-number {
-            font-size: 2rem;
+            font-size: 2.5rem;
             font-weight: 700;
             color: #00d4ff;
             display: block;
+            text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+            animation: statGlow 2s ease-in-out infinite;
+        }
+        
+        @keyframes statGlow {
+            0%, 100% { text-shadow: 0 0 20px rgba(0, 212, 255, 0.5); }
+            50% { text-shadow: 0 0 30px rgba(0, 212, 255, 0.8), 0 0 40px rgba(0, 212, 255, 0.4); }
         }
         
         .challenge-grid {
@@ -150,41 +323,108 @@
         }
         
         .challenge-card {
-            background: rgba(255, 255, 255, 0.1);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.12));
             padding: 2rem;
-            border-radius: 15px;
+            border-radius: 20px;
             cursor: pointer;
-            transition: all 0.3s ease;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .challenge-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            transition: left 0.5s;
+        }
+        
+        .challenge-card:hover::before {
+            left: 100%;
         }
         
         .challenge-card:hover {
-            transform: translateY(-5px);
-            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-8px) scale(1.02);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.2));
+            border-color: rgba(0, 212, 255, 0.5);
+            box-shadow: 0 15px 50px rgba(0, 212, 255, 0.3);
         }
         
         .challenge-icon {
-            font-size: 3rem;
+            font-size: 3.5rem;
             margin-bottom: 1rem;
+            animation: iconBounce 2s ease-in-out infinite;
+            filter: drop-shadow(0 5px 15px rgba(0, 212, 255, 0.3));
+        }
+        
+        @keyframes iconBounce {
+            0%, 100% { 
+                transform: translateY(0px) scale(1);
+            }
+            50% { 
+                transform: translateY(-10px) scale(1.05);
+            }
         }
         
         .avatar-option {
-            background: rgba(255, 255, 255, 0.1);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
             border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
-            padding: 0.5rem;
+            border-radius: 12px;
+            padding: 0.8rem;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            backdrop-filter: blur(10px);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .avatar-option::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: radial-gradient(circle, rgba(255, 105, 180, 0.3), transparent);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.4s, height 0.4s;
+        }
+        
+        .avatar-option:hover::before {
+            width: 200%;
+            height: 200%;
         }
         
         .avatar-option:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: scale(1.1);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.15));
+            transform: scale(1.15) rotate(3deg);
+            border-color: rgba(255, 105, 180, 0.5);
+            box-shadow: 0 5px 20px rgba(255, 105, 180, 0.3);
         }
         
         .avatar-option.selected {
             border-color: #ff69b4;
-            box-shadow: 0 0 15px rgba(255, 105, 180, 0.6);
+            box-shadow: 0 0 25px rgba(255, 105, 180, 0.8);
+            background: linear-gradient(135deg, rgba(255, 105, 180, 0.2), rgba(255, 105, 180, 0.1));
+            transform: scale(1.1);
+            animation: selectedPulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes selectedPulse {
+            0%, 100% { 
+                box-shadow: 0 0 25px rgba(255, 105, 180, 0.8);
+            }
+            50% { 
+                box-shadow: 0 0 35px rgba(255, 105, 180, 1);
+            }
         }
         
         #avatar-preview {
@@ -208,26 +448,61 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            background: rgba(0, 0, 0, 0.8);
-            padding: 1rem 2rem;
-            border-radius: 15px;
+            background: linear-gradient(135deg, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0.6));
+            padding: 1.5rem 2rem;
+            border-radius: 20px;
             margin-bottom: 2rem;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(15px);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
         }
         
         .back-btn {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
             color: #ffffff;
-            padding: 0.5rem 1rem;
+            padding: 0.8rem 1.5rem;
             cursor: pointer;
             font-family: inherit;
+            position: relative;
+            z-index: 100;
+            pointer-events: auto;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+        }
+        
+        .back-btn:hover {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.1));
+            border-color: #00d4ff;
+            transform: translateX(-5px);
+            box-shadow: 0 5px 20px rgba(0, 212, 255, 0.3);
+        }
+        
+        .back-btn:active {
+            transform: translateX(-3px) scale(0.95);
         }
         
         .challenge-timer {
-            font-size: 2rem;
+            font-size: 2.5rem;
             font-weight: 700;
             color: #ff6b6b;
+            text-shadow: 0 0 20px rgba(255, 107, 107, 0.6);
+            animation: timerPulse 1s ease-in-out infinite;
+            padding: 0.5rem 1rem;
+            background: rgba(255, 107, 107, 0.1);
+            border-radius: 12px;
+            border: 2px solid rgba(255, 107, 107, 0.3);
+        }
+        
+        @keyframes timerPulse {
+            0%, 100% { 
+                text-shadow: 0 0 20px rgba(255, 107, 107, 0.6);
+            }
+            50% { 
+                text-shadow: 0 0 30px rgba(255, 107, 107, 0.8), 0 0 40px rgba(255, 107, 107, 0.4);
+            }
         }
         
         /* Heritage Challenge */
@@ -236,11 +511,14 @@
         }
         
         .pattern-info {
-            background: rgba(255, 215, 0, 0.1);
-            padding: 1rem;
-            border-radius: 10px;
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 215, 0, 0.08));
+            padding: 1.5rem;
+            border-radius: 15px;
             margin-bottom: 2rem;
             text-align: center;
+            border: 2px solid rgba(255, 215, 0, 0.3);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 30px rgba(255, 215, 0, 0.2);
         }
         
         .grid-container {
@@ -259,8 +537,8 @@
         .grid-game {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 2px;
-            max-width: 300px;
+            gap: 8px;
+            max-width: 280px;
             margin: 1rem auto;
         }
         
@@ -268,35 +546,56 @@
             width: 60px;
             height: 60px;
             border: 2px solid rgba(255, 215, 0, 0.3);
-            border-radius: 8px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 1.5rem;
             cursor: pointer;
-            transition: all 0.3s ease;
-            background: rgba(255, 255, 255, 0.05);
+            transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+            backdrop-filter: blur(5px);
+            will-change: transform;
         }
         
         .grid-cell:hover {
-            background: rgba(255, 215, 0, 0.2);
             transform: scale(1.05);
+            border-color: rgba(255, 215, 0, 0.6);
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
         }
         
         .grid-cell.target {
-            background: rgba(255, 215, 0, 0.3);
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.4), rgba(255, 215, 0, 0.2));
             color: #ffd700;
+            border-color: rgba(255, 215, 0, 0.6);
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+            animation: targetPulse 3s ease-in-out infinite;
+            transform: translateZ(0);
+        }
+        
+        @keyframes targetPulse {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 1; }
         }
         
         .grid-cell.selected {
-            background: rgba(255, 215, 0, 0.6);
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.7), rgba(255, 215, 0, 0.5));
             border-color: #ffd700;
-            box-shadow: 0 0 15px rgba(255, 215, 0, 0.6);
+            box-shadow: 0 0 25px rgba(255, 215, 0, 0.8);
+            transform: scale(1.05) translateZ(0);
         }
         
         .grid-cell.correct {
-            background: rgba(0, 255, 0, 0.4);
+            background: linear-gradient(135deg, rgba(0, 255, 0, 0.5), rgba(0, 255, 0, 0.3));
             border-color: #00ff00;
+            box-shadow: 0 0 25px rgba(0, 255, 0, 0.6);
+            animation: correctPulse 0.5s ease-out;
+        }
+        
+        @keyframes correctPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
         }
         
         /* Innovation Challenge */
@@ -305,20 +604,37 @@
         }
         
         .quiz-container {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 2rem;
-            border-radius: 15px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+            padding: 2.5rem;
+            border-radius: 20px;
             max-width: 800px;
             margin: 0 auto;
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(15px);
+            box-shadow: 0 15px 50px rgba(0, 0, 0, 0.3);
         }
         
         .question-display {
             font-size: 1.3rem;
             margin-bottom: 2rem;
-            padding: 1rem;
-            background: rgba(70, 130, 180, 0.2);
-            border-radius: 10px;
-            border-left: 4px solid #4682b4;
+            padding: 1.5rem;
+            background: linear-gradient(135deg, rgba(70, 130, 180, 0.25), rgba(70, 130, 180, 0.15));
+            border-radius: 15px;
+            border-left: 5px solid #4682b4;
+            box-shadow: 0 5px 20px rgba(70, 130, 180, 0.2);
+            backdrop-filter: blur(10px);
+            animation: questionSlideIn 0.5s ease-out;
+        }
+        
+        @keyframes questionSlideIn {
+            from { 
+                opacity: 0;
+                transform: translateX(-30px);
+            }
+            to { 
+                opacity: 1;
+                transform: translateX(0);
+            }
         }
         
         .quiz-options {
@@ -329,28 +645,65 @@
         }
         
         .quiz-option {
-            padding: 1rem;
-            background: rgba(255, 255, 255, 0.05);
+            padding: 1.2rem;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.05));
             border: 2px solid rgba(70, 130, 180, 0.3);
-            border-radius: 10px;
+            border-radius: 15px;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             text-align: left;
+            backdrop-filter: blur(10px);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .quiz-option::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 4px;
+            background: linear-gradient(180deg, #4682b4, #00bfff);
+            transform: scaleY(0);
+            transition: transform 0.3s ease;
+        }
+        
+        .quiz-option:hover::before {
+            transform: scaleY(1);
         }
         
         .quiz-option:hover {
-            background: rgba(70, 130, 180, 0.2);
+            background: linear-gradient(135deg, rgba(70, 130, 180, 0.25), rgba(70, 130, 180, 0.15));
             border-color: #4682b4;
+            transform: translateX(10px);
+            box-shadow: 0 5px 25px rgba(70, 130, 180, 0.3);
         }
         
         .quiz-option.correct {
-            background: rgba(76, 175, 80, 0.3);
+            background: linear-gradient(135deg, rgba(76, 175, 80, 0.4), rgba(76, 175, 80, 0.2));
             border-color: #4caf50;
+            box-shadow: 0 0 30px rgba(76, 175, 80, 0.5);
+            animation: correctAnswer 0.6s ease-out;
+        }
+        
+        @keyframes correctAnswer {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
         }
         
         .quiz-option.incorrect {
-            background: rgba(244, 67, 54, 0.3);
+            background: linear-gradient(135deg, rgba(244, 67, 54, 0.4), rgba(244, 67, 54, 0.2));
             border-color: #f44336;
+            box-shadow: 0 0 30px rgba(244, 67, 54, 0.5);
+            animation: shake 0.5s ease-out;
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
         }
         
         .quiz-stats {
@@ -381,16 +734,21 @@
             position: absolute;
             width: 100%;
             opacity: 0;
-            transition: opacity 2s ease-in-out;
+            transform: translateY(20px) scale(0.98);
+            transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1),
+                        transform 1.2s cubic-bezier(0.4, 0, 0.2, 1);
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 2rem;
+            pointer-events: none;
         }
         
         .story-scene.active {
             opacity: 1;
             position: relative;
+            transform: translateY(0) scale(1);
+            pointer-events: auto;
         }
         
         .ancient-weaver {
@@ -473,6 +831,19 @@
             padding: 1.5rem;
             border-radius: 10px;
             max-width: 600px;
+            backdrop-filter: blur(10px);
+            animation: textSlideIn 1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        @keyframes textSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
         
         .story-text h4 {
@@ -505,16 +876,21 @@
             position: absolute;
             width: 100%;
             opacity: 0;
-            transition: opacity 2s ease-in-out;
+            transform: translateX(30px) scale(0.97);
+            transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1),
+                        transform 1.2s cubic-bezier(0.4, 0, 0.2, 1);
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 2rem;
+            pointer-events: none;
         }
         
         .eng-scene.active {
             opacity: 1;
             position: relative;
+            transform: translateX(0) scale(1);
+            pointer-events: auto;
         }
         
         .smart-fabric-demo {
@@ -663,11 +1039,31 @@
         }
         
         .mission-brief {
-            background: rgba(0, 255, 255, 0.1);
+            background: linear-gradient(135deg, rgba(0, 255, 255, 0.15), rgba(0, 255, 255, 0.08));
             border: 2px solid #00ffff;
-            border-radius: 15px;
-            padding: 2rem;
+            border-radius: 20px;
+            padding: 2.5rem;
             margin-bottom: 2rem;
+            backdrop-filter: blur(15px);
+            box-shadow: 0 10px 40px rgba(0, 255, 255, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .mission-brief::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.2), transparent);
+            animation: missionScan 3s ease-in-out infinite;
+        }
+        
+        @keyframes missionScan {
+            0% { left: -100%; }
+            100% { left: 100%; }
         }
         
         .mission-text {
@@ -718,16 +1114,36 @@
         }
         
         .material-card {
-            background: rgba(0, 255, 255, 0.1);
+            background: linear-gradient(135deg, rgba(0, 255, 255, 0.12), rgba(0, 255, 255, 0.08));
             border: 2px solid rgba(0, 255, 255, 0.3);
-            border-radius: 12px;
+            border-radius: 15px;
             padding: 1.5rem;
-            transition: all 0.3s ease;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            backdrop-filter: blur(10px);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .material-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(0, 255, 255, 0.1) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+        
+        .material-card:hover::before {
+            opacity: 1;
         }
         
         .material-card:hover {
             border-color: #00ffff;
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+            box-shadow: 0 10px 40px rgba(0, 255, 255, 0.4);
+            transform: translateY(-5px) scale(1.02);
         }
         
         .material-header {
@@ -771,22 +1187,34 @@
         .slider::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
-            width: 20px;
-            height: 20px;
+            width: 24px;
+            height: 24px;
             border-radius: 50%;
-            background: #00ffff;
+            background: linear-gradient(135deg, #00ffff, #4ecdc4);
             cursor: pointer;
-            box-shadow: 0 0 10px #00ffff;
+            box-shadow: 0 0 15px #00ffff, 0 3px 10px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 25px #00ffff, 0 5px 15px rgba(0, 0, 0, 0.4);
         }
         
         .slider::-moz-range-thumb {
-            width: 20px;
-            height: 20px;
+            width: 24px;
+            height: 24px;
             border-radius: 50%;
-            background: #00ffff;
+            background: linear-gradient(135deg, #00ffff, #4ecdc4);
             cursor: pointer;
-            box-shadow: 0 0 10px #00ffff;
+            box-shadow: 0 0 15px #00ffff, 0 3px 10px rgba(0, 0, 0, 0.3);
             border: none;
+            transition: all 0.3s ease;
+        }
+        
+        .slider::-moz-range-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 25px #00ffff, 0 5px 15px rgba(0, 0, 0, 0.4);
         }
         
         .slider-value {
@@ -883,18 +1311,27 @@
         }
         
         .canvas-container {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 2rem;
-            border-radius: 15px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+            padding: 2.5rem;
+            border-radius: 20px;
             text-align: center;
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(15px);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
         }
         
         #design-canvas {
-            border: 2px solid #00ffff;
-            border-radius: 10px;
+            border: 3px solid #00ffff;
+            border-radius: 15px;
             cursor: crosshair;
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.4), inset 0 0 20px rgba(0, 255, 255, 0.1);
             background: #000;
+            transition: all 0.3s ease;
+        }
+        
+        #design-canvas:hover {
+            box-shadow: 0 0 40px rgba(0, 255, 255, 0.6), inset 0 0 30px rgba(0, 255, 255, 0.15);
+            transform: scale(1.01);
         }
         
         .canvas-controls {
@@ -908,20 +1345,54 @@
         .color-btn {
             width: 50px;
             height: 50px;
-            border: 2px solid #00ffff;
+            border: 3px solid #00ffff;
             border-radius: 50%;
             cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+        }
+        
+        .color-btn::before {
+            content: '';
+            position: absolute;
+            top: -5px;
+            left: -5px;
+            right: -5px;
+            bottom: -5px;
+            border-radius: 50%;
+            border: 2px solid transparent;
             transition: all 0.3s ease;
         }
         
         .color-btn:hover {
-            transform: scale(1.1);
-            box-shadow: 0 0 15px rgba(0, 255, 255, 0.6);
+            transform: scale(1.15) rotate(5deg);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.6);
+        }
+        
+        .color-btn:hover::before {
+            border-color: rgba(0, 255, 255, 0.3);
         }
         
         .color-btn.active {
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.8);
-            transform: scale(1.2);
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.9);
+            transform: scale(1.25);
+            border-width: 4px;
+        }
+        
+        .color-btn.active::before {
+            border-color: #00ffff;
+            animation: colorRing 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes colorRing {
+            0%, 100% { 
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% { 
+                transform: scale(1.2);
+                opacity: 0.5;
+            }
         }
         
         .score-display {
@@ -959,15 +1430,20 @@
             width: 100%;
             height: 100%;
             opacity: 0;
-            transition: opacity 2s ease-in-out;
+            transform: scale(0.95);
+            transition: opacity 1.5s cubic-bezier(0.4, 0, 0.2, 1), 
+                        transform 1.5s cubic-bezier(0.4, 0, 0.2, 1);
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
+            pointer-events: none;
         }
         
         .video-scene.active {
             opacity: 1;
+            transform: scale(1);
+            pointer-events: auto;
         }
         
         /* Scene Backgrounds */
@@ -1344,6 +1820,18 @@
             border-radius: 15px;
             margin: 2rem;
             border: 1px solid rgba(255, 255, 255, 0.2);
+            animation: narrativeSlideIn 1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        @keyframes narrativeSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
         }
         
         .narrator-title {
@@ -1359,7 +1847,7 @@
             line-height: 1.6;
             color: #ffffff;
             font-style: italic;
-            animation: textFadeIn 2s ease-in-out;
+            animation: textFadeIn 1.5s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
         /* Video UI */
@@ -1390,7 +1878,8 @@
             height: 100%;
             background: linear-gradient(90deg, #4682b4, #00bfff);
             width: 0%;
-            transition: width 0.5s ease;
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 10px rgba(70, 130, 180, 0.5);
         }
         
         .scene-indicators {
@@ -1416,22 +1905,35 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: relative;
+            z-index: 100;
         }
         
         .control-btn {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+            border: 2px solid rgba(255, 255, 255, 0.3);
             border-radius: 25px;
             color: #ffffff;
             padding: 0.8rem 1.5rem;
             cursor: pointer;
             font-family: inherit;
-            transition: all 0.3s ease;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            z-index: 100;
+            pointer-events: auto;
+            backdrop-filter: blur(10px);
+            font-weight: 600;
         }
         
         .control-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateY(-2px);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.15));
+            transform: translateY(-3px) scale(1.05);
+            border-color: #00d4ff;
+            box-shadow: 0 5px 20px rgba(0, 212, 255, 0.3);
+        }
+        
+        .control-btn:active {
+            transform: translateY(-1px) scale(1.02);
         }
         
         .video-timer {
@@ -1551,7 +2053,8 @@
             height: 100%;
             background: linear-gradient(90deg, #4682b4, #00bfff);
             width: 0%;
-            animation: videoProgress 8s linear;
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 10px rgba(70, 130, 180, 0.5);
         }
         
         .video-controls {
@@ -1672,8 +2175,16 @@
         }
         
         @keyframes textFadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+            0% { 
+                opacity: 0; 
+                transform: translateY(30px);
+                filter: blur(5px);
+            }
+            100% { 
+                opacity: 1; 
+                transform: translateY(0);
+                filter: blur(0);
+            }
         }
         
         /* Slower animation speeds for better viewing */
@@ -1788,44 +2299,58 @@
             <p class="subtitle">Competitive Textile History Challenge</p>
             
             <!-- Login/Register Toggle -->
-            <div style="margin-bottom: 2rem;">
-                <button class="game-btn" id="show-register" onclick="showRegisterForm()" style="background: rgba(255,255,255,0.1);">Register</button>
-                <button class="game-btn" id="show-login" onclick="showLoginForm()">Login</button>
+            <div style="display: flex; gap: 1.5rem; margin-bottom: 2rem; justify-content: center;">
+                <button class="game-btn" id="show-register" onclick="showRegisterForm()" style="background: linear-gradient(45deg, #00d4ff, #4ecdc4); flex: 1; max-width: 250px; padding: 1rem 2rem; font-size: 1.1rem;">Register</button>
+                <button class="game-btn" id="show-login" onclick="showLoginForm()" style="background: rgba(255,255,255,0.1); flex: 1; max-width: 250px; padding: 1rem 2rem; font-size: 1.1rem;">Login</button>
             </div>
             
             <!-- Register Form -->
-            <div id="register-form" style="display: none;">
-                <h3 style="color: #00d4ff; margin-bottom: 1rem;">Create Account</h3>
-                <input type="email" id="register-email" placeholder="Enter your email" required>
-                <input type="text" id="register-name" placeholder="Enter your weaver name" maxlength="20" required>
-                <input type="password" id="register-password" placeholder="Create password" minlength="6" required>
+            <div id="register-form" style="display: block;">
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="color: #00d4ff; margin-bottom: 0.5rem; font-size: 1.8rem;">Create Account</h3>
+                    <p style="color: #a0a0a0; font-size: 1rem;">Join the chronoweaving adventure</p>
+                </div>
                 
-                <select id="register-difficulty">
-                    <option value="apprentice">Apprentice (Easy)</option>
-                    <option value="artisan">Artisan (Medium)</option>
-                    <option value="master">Master Weaver (Hard)</option>
-                </select>
+                <div style="display: flex; flex-direction: column; gap: 1.2rem; margin-bottom: 2rem;">
+                    <input type="email" id="register-email" placeholder="✉️ Enter your email" required>
+                    <input type="text" id="register-name" placeholder="👤 Enter your weaver name" maxlength="20" required>
+                    <input type="password" id="register-password" placeholder="🔒 Create password (6+ characters)" minlength="6" required>
+                    
+                    <select id="register-difficulty">
+                        <option value="apprentice">🌱 Apprentice (Easy)</option>
+                        <option value="artisan">⚙️ Artisan (Medium)</option>
+                        <option value="master">🏆 Master Weaver (Hard)</option>
+                    </select>
+                </div>
                 
-                <button class="enter-btn" onclick="registerNewPlayer()">Create Account</button>
-                <p style="color: #a0a0a0; font-size: 0.85rem; margin-top: 1rem;">
-                    Already have an account? <a href="#" onclick="showLoginForm(); return false;" style="color: #00d4ff;">Login here</a>
+                <button class="enter-btn" onclick="registerNewPlayer()" style="margin-top: 1rem; padding: 1.2rem; font-size: 1.1rem;">🚀 Create Account</button>
+                
+                <p style="color: #a0a0a0; font-size: 0.95rem; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                    Already have an account? <a href="#" onclick="showLoginForm(); return false;" style="color: #00d4ff; text-decoration: none; font-weight: 600;">Login here →</a>
                 </p>
             </div>
             
             <!-- Login Form -->
-            <div id="login-form">
-                <h3 style="color: #00d4ff; margin-bottom: 1rem;">Welcome Back</h3>
-                <input type="email" id="login-email" placeholder="Enter your email" required>
-                <input type="password" id="login-password" placeholder="Enter password" required>
+            <div id="login-form" style="display: none;">
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="color: #00d4ff; margin-bottom: 0.5rem; font-size: 1.8rem;">Welcome Back</h3>
+                    <p style="color: #a0a0a0; font-size: 1rem;">Continue your chronoweaving journey</p>
+                </div>
                 
-                <button class="enter-btn" onclick="loginPlayer()">Login</button>
-                <p style="color: #a0a0a0; font-size: 0.85rem; margin-top: 1rem;">
-                    New to Chronoweave? <a href="#" onclick="showRegisterForm(); return false;" style="color: #00d4ff;">Register here</a>
+                <div style="display: flex; flex-direction: column; gap: 1.2rem; margin-bottom: 2rem;">
+                    <input type="email" id="login-email" placeholder="✉️ Enter your email" required>
+                    <input type="password" id="login-password" placeholder="🔒 Enter password" required>
+                </div>
+                
+                <button class="enter-btn" onclick="loginPlayer()" style="margin-top: 1rem; padding: 1.2rem; font-size: 1.1rem;">🎮 Login</button>
+                
+                <p style="color: #a0a0a0; font-size: 0.95rem; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                    New to Chronoweave? <a href="#" onclick="showRegisterForm(); return false;" style="color: #00d4ff; text-decoration: none; font-weight: 600;">Register here →</a>
                 </p>
             </div>
             
-            <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid rgba(255,255,255,0.2);">
-                <p style="color: #a0a0a0; font-size: 0.9rem;">
+            <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.2);">
+                <p style="color: #a0a0a0; font-size: 0.95rem;">
                     🔴 LIVE: <span id="live-players">247</span> players online | 🏆 Next competition: <span id="competition-timer">5:23:45</span>
                 </p>
             </div>
@@ -1846,9 +2371,10 @@
                 </div>
                 
                 <div class="player-stats">
-                    <div class="stat">
+                    <div class="stat" onclick="openLeaderboard()" style="cursor: pointer; transition: all 0.3s ease;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
                         <span class="stat-number" id="player-rank">#156</span>
-                        <span>Global Rank</span>
+                        <span>Global Rank 🏆</span>
+                        <div style="font-size: 0.7rem; color: #00d4ff; margin-top: 0.3rem;">Click to view</div>
                     </div>
                     <div class="stat">
                         <span class="stat-number" id="total-score">0</span>
@@ -1865,6 +2391,44 @@
                     <div class="stat">
                         <span class="stat-number" id="challenges-completed">0/3</span>
                         <span>Challenges</span>
+                    </div>
+                </div>
+                
+                <!-- Streak System -->
+                <div style="background: linear-gradient(135deg, rgba(255,100,50,0.2), rgba(255,150,0,0.2)); padding: 2rem; border-radius: 15px; margin-bottom: 2rem; border: 2px solid rgba(255,150,0,0.3);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 2rem;">
+                        <div style="flex: 1; min-width: 250px;">
+                            <h3 style="color: #ff9500; margin-bottom: 1rem;">🔥 Daily Streak</h3>
+                            <div style="display: flex; gap: 2rem; align-items: center;">
+                                <div>
+                                    <div style="font-size: 3rem; font-weight: 700; color: #ff9500;" id="current-streak">0</div>
+                                    <div style="color: #a0a0a0;">Current Streak</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 2rem; font-weight: 700; color: #ffd700;" id="longest-streak">0</div>
+                                    <div style="color: #a0a0a0;">Longest Streak</div>
+                                </div>
+                            </div>
+                            <div style="margin-top: 1rem; padding: 1rem; background: rgba(0,0,0,0.3); border-radius: 10px;">
+                                <div style="color: #a0a0a0; margin-bottom: 0.5rem;">Today's Progress:</div>
+                                <div style="display: flex; gap: 1rem; justify-content: center;">
+                                    <div id="streak-heritage" style="font-size: 2rem; opacity: 0.3;">🪔</div>
+                                    <div id="streak-innovation" style="font-size: 2rem; opacity: 0.3;">⚙️</div>
+                                    <div id="streak-future" style="font-size: 2rem; opacity: 0.3;">🚀</div>
+                                </div>
+                                <div style="color: #a0a0a0; font-size: 0.9rem; margin-top: 0.5rem;">Complete all 3 challenges today to maintain your streak!</div>
+                            </div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="background: rgba(255,215,0,0.2); padding: 1.5rem; border-radius: 15px; border: 2px solid rgba(255,215,0,0.3);">
+                                <div style="font-size: 2rem; margin-bottom: 0.5rem;">🛡️</div>
+                                <div style="font-weight: 700; color: #ffd700; margin-bottom: 0.5rem;">Streak Saves: <span id="streak-saves">0</span></div>
+                                <div style="color: #a0a0a0; font-size: 0.85rem; margin-bottom: 1rem;">Protect your streak if you miss a day!</div>
+                                <button onclick="buyStreakSave()" class="game-btn" style="background: linear-gradient(45deg, #ffd700, #ff9500); color: #000; font-size: 0.9rem;">
+                                    Buy Streak Save<br><span style="font-size: 0.8rem;">500 🪙</span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
@@ -1984,6 +2548,41 @@
         </div>
     </div>
 
+    <!-- Leaderboard Screen -->
+    <div id="leaderboard" class="screen">
+        <div class="container">
+            <div style="max-width: 900px; margin: 0 auto;">
+                <div class="challenge-header" style="margin-bottom: 2rem;">
+                    <button class="back-btn" onclick="closeLeaderboard()">← Back to Dashboard</button>
+                    <h2 style="color: #ffd700;">🏆 Weekly Leaderboard</h2>
+                    <div style="text-align: right; color: #a0a0a0; font-size: 0.9rem;">
+                        Resets every Monday
+                    </div>
+                </div>
+                
+                <div style="background: linear-gradient(135deg, rgba(255,215,0,0.1), rgba(255,150,0,0.1)); padding: 2rem; border-radius: 20px; border: 2px solid rgba(255,215,0,0.3);">
+                    <div style="text-align: center; margin-bottom: 2rem;">
+                        <div style="font-size: 1.2rem; color: #a0a0a0; margin-bottom: 0.5rem;">Your Weekly Rank</div>
+                        <div style="font-size: 3rem; font-weight: 700; color: #ffd700;" id="leaderboard-your-rank">#-</div>
+                        <div style="color: #a0a0a0; margin-top: 0.5rem;">
+                            <span id="leaderboard-your-score">0</span> points this week
+                        </div>
+                    </div>
+                    
+                    <div id="leaderboard-list" style="background: rgba(0,0,0,0.3); border-radius: 15px; padding: 1rem;">
+                        <div style="text-align: center; color: #a0a0a0; padding: 2rem;">
+                            Loading leaderboard...
+                        </div>
+                    </div>
+                    
+                    <div style="text-align: center; margin-top: 1.5rem; color: #a0a0a0; font-size: 0.9rem;">
+                        Showing 5 players above and 5 players below your rank
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Settings Screen -->
     <div id="settings" class="screen">
         <div class="container">
@@ -2078,17 +2677,23 @@
                     
                     <div style="margin-bottom: 1.5rem;">
                         <label style="display: block; color: #a0a0a0; margin-bottom: 0.5rem;">New Password</label>
-                        <input type="password" id="settings-new-password" placeholder="Enter new password" minlength="6">
+                        <input type="password" id="settings-new-password" placeholder="Enter new password" minlength="6" oninput="validatePasswordFields()">
                     </div>
                     
                     <div style="margin-bottom: 1.5rem;">
                         <label style="display: block; color: #a0a0a0; margin-bottom: 0.5rem;">Confirm New Password</label>
-                        <input type="password" id="settings-confirm-password" placeholder="Confirm new password" minlength="6">
+                        <input type="password" id="settings-confirm-password" placeholder="Confirm new password" minlength="6" oninput="validatePasswordFields()">
+                        <div id="password-match-indicator" style="margin-top: 0.5rem; font-size: 0.8rem;"></div>
                     </div>
                     
-                    <button class="game-btn" onclick="changePassword()">
+                    <button class="game-btn" onclick="changePassword()" id="change-password-btn">
                         🔐 Change Password
                     </button>
+                    
+                    <div style="margin-top: 1rem; color: #a0a0a0; font-size: 0.9rem;">
+                        <p>💡 <strong>Note:</strong> Your password must be at least 6 characters long.</p>
+                        <p>🔒 For security, make sure to use a strong password with letters, numbers, and symbols.</p>
+                    </div>
                 </div>
                 
                 <!-- Statistics -->
@@ -2476,31 +3081,22 @@
                         </div>
                     </div>
 
-                    <!-- Video Controls -->
-                    <div class="video-ui">
-                        <div class="progress-container">
-                            <div class="progress-bar">
-                                <div class="progress-fill" id="narrative-progress"></div>
-                            </div>
-                            <div class="scene-indicators">
-                                <!-- Dots generated dynamically based on difficulty level -->
-                            </div>
+                </div>
+                
+                <!-- Video UI Controls at Bottom -->
+                <div class="video-ui">
+                    <div class="video-progress-bar">
+                        <div class="video-progress-fill" id="narrative-progress"></div>
+                    </div>
+                    
+                    <div class="video-controls">
+                        <button class="control-btn" onclick="previousInnovationScene()">⏮️ Back</button>
+                        <button class="control-btn" onclick="pauseVideo()" id="pause-btn">⏸️ Pause</button>
+                        <button class="control-btn" onclick="nextInnovationScene()">⏭️ Forward</button>
+                        <div class="video-timer">
+                            <span id="narrative-timer">0:30</span>
                         </div>
-                        
-                        <div class="video-controls">
-                            <button class="control-btn" onclick="skipVideo()">
-                                <span>⏭️ Skip</span>
-                            </button>
-                            <div class="video-timer">
-                                <span id="narrative-timer">0:30</span>
-                            </div>
-                            <button class="control-btn" onclick="pauseVideo()" id="pause-btn">
-                                <span>⏸️ Pause</span>
-                            </button>
-                            <button class="control-btn" onclick="startQuizAfterVideo()" style="background: #4682b4;">
-                                <span>🎯 Start Quiz</span>
-                            </button>
-                        </div>
+                        <button class="control-btn" onclick="startQuizAfterVideo()" style="background: linear-gradient(45deg, #4682b4, #5a9bd4); color: #fff; font-weight: 700;">🎯 Start Quiz</button>
                     </div>
                 </div>
             </div>
@@ -2596,12 +3192,18 @@
                         <div class="video-progress-fill" id="engineering-video-progress"></div>
                     </div>
                     
+                    <div class="video-progress-bar">
+                        <div class="video-progress-fill" id="engineering-video-progress"></div>
+                    </div>
+                    
                     <div class="video-controls">
-                        <button class="control-btn" onclick="skipEngineeringVideo()">⏭️ Skip</button>
+                        <button class="control-btn" onclick="previousEngineeringScene()">⏮️ Back</button>
+                        <button class="control-btn" onclick="pauseEngineeringVideo()" id="engineering-pause-btn">⏸️ Pause</button>
+                        <button class="control-btn" onclick="nextEngineeringScene()">⏭️ Forward</button>
                         <div class="video-timer">
                             <span id="engineering-video-timer">0:20</span>
                         </div>
-                        <button class="control-btn" onclick="startEngineeringChallenge()">🎯 Start Challenge</button>
+                        <button class="control-btn" onclick="startEngineeringChallenge()" style="background: linear-gradient(45deg, #00ffff, #4ecdc4); color: #000; font-weight: 700;">🎯 Start Challenge</button>
                     </div>
                 </div>
             </div>
@@ -2777,22 +3379,644 @@
     <script>
         console.log('Chronoweave loaded');
         
-        // Firebase Configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyA_9igAEZ0bbNrK27W5tKUapijn2HJdCq4",
-            authDomain: "chronoweave-53e06.firebaseapp.com",
-            projectId: "chronoweave-53e06",
-            storageBucket: "chronoweave-53e06.firebasestorage.app",
-            messagingSenderId: "127960888564",
-            appId: "1:127960888564:web:871a8ae8c78c0062941aa1"
+        // Global Variables
+        let heritageVideoTimer = null;
+        let heritageSceneIndex = 1;
+        let heritageVideoPaused = false;
+        
+        // DOM Element Cache for Performance
+        const domCache = {
+            // Auth elements
+            registerForm: null,
+            loginForm: null,
+            showRegister: null,
+            showLogin: null,
+            
+            // Dashboard elements
+            dashboard: null,
+            registration: null,
+            welcomeText: null,
+            playerEmail: null,
+            totalScore: null,
+            playerLevel: null,
+            lastPlayed: null,
+            
+            // Challenge stats
+            heritageBest: null,
+            innovationBest: null,
+            futureBest: null,
+            challengesCompleted: null,
+            
+            // Streak elements
+            currentStreak: null,
+            longestStreak: null,
+            streakSaves: null,
+            streakHeritage: null,
+            streakInnovation: null,
+            streakFuture: null,
+            
+            // Form inputs
+            registerEmail: null,
+            registerName: null,
+            registerPassword: null,
+            registerDifficulty: null,
+            loginEmail: null,
+            loginPassword: null,
+            
+            get: function(id) {
+                if (!this[id]) {
+                    this[id] = document.getElementById(id);
+                }
+                return this[id];
+            }
         };
         
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.firestore();
+        // Heritage Challenge State
+        let heritageSpeedRun = { patternsCompleted: 0, totalScore: 0, usedPatterns: [] };
+        let currentPattern = null;
+        let playerPattern = [];
         
-        console.log('Firebase initialized successfully!');
+        // Innovation Challenge Variables
+        let narrativeTimer = null;
+        let currentQuestionIndex = 0;
+        let quizScore = 0;
+        let quizStreak = 0;
+        let currentScene = 1;
+        let videoPaused = false;
+        let currentQuestions = [];
+        
+        // Engineering Challenge Variables
+        let engineeringVideoTimer = null;
+        let engineeringComposition = { carbon: 0, silver: 0, polymer: 0, cotton: 0 };
+        let engineeringResults = { conductivity: 0, weight: 0, durability: 0, cost: 0 };
+        
+        // Supabase Configuration
+        const SUPABASE_URL = 'https://zckwuqkmbmqkniltbvki.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpja3d1cWttYm1xa25pbHRidmtpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzMzY0MTksImV4cCI6MjA3ODkxMjQxOX0.fUUGaVoXYOBV3xjwcRrroHb4nhTPlgio71Ssg29YLqI';
+        
+        // Initialize Supabase
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        let currentUser = null;
+        
+        console.log('✅ Supabase initialized successfully!');
+        
+        // Heritage Challenge Pattern Data
+        // Function to validate pattern uniqueness
+        function validatePatternUniqueness() {
+            Object.keys(heritagePatterns).forEach(level => {
+                const patterns = heritagePatterns[level];
+                const patternStrings = patterns.map(p => JSON.stringify(p.pattern.sort()));
+                const uniquePatterns = [...new Set(patternStrings)];
+                
+                if (patternStrings.length !== uniquePatterns.length) {
+                    console.warn(`⚠️ Duplicate patterns found in ${level} level!`);
+                    // Find and log duplicates
+                    const duplicates = patternStrings.filter((item, index) => patternStrings.indexOf(item) !== index);
+                    console.warn('Duplicate patterns:', duplicates);
+                } else {
+                    console.log(`✅ All ${patterns.length} patterns in ${level} level are unique`);
+                }
+            });
+        }
+        
+        const heritagePatterns = {
+            apprentice: [
+                { 
+                    name: "Simple Cross", 
+                    pattern: [1, 3, 4, 5, 7], 
+                    points: 20, 
+                    gridSize: 9,
+                    history: "The cross pattern is one of humanity's oldest symbols, found in Neolithic textiles from 8000 BCE. Early weavers used this pattern to represent the four cardinal directions and the intersection of earth and sky.",
+                    culture: "Universal",
+                    period: "8000 BCE - Present"
+                },
+                { 
+                    name: "Corner Dots", 
+                    pattern: [0, 2, 6, 8], 
+                    points: 15, 
+                    gridSize: 9,
+                    history: "Corner dot patterns originated in ancient Mesopotamian textiles around 3500 BCE. These dots represented stars and were believed to bring protection to the wearer during night travels.",
+                    culture: "Mesopotamian",
+                    period: "3500 BCE"
+                },
+                { 
+                    name: "T-Shape", 
+                    pattern: [0, 1, 2, 4, 7], 
+                    points: 25, 
+                    gridSize: 9,
+                    history: "The T-pattern was sacred to ancient Egyptian weavers, symbolizing the Ankh (key of life). Found in tomb textiles from 2500 BCE, it was woven into burial shrouds to ensure safe passage to the afterlife.",
+                    culture: "Ancient Egyptian",
+                    period: "2500 BCE"
+                },
+                { 
+                    name: "Diamond", 
+                    pattern: [1, 4, 6, 7], 
+                    points: 30, 
+                    gridSize: 9,
+                    history: "Diamond patterns appear in the earliest known woven textiles from Çatalhöyük, Turkey (7000 BCE). They represented fertility and abundance, often woven into women's ceremonial garments.",
+                    culture: "Neolithic Anatolia",
+                    period: "7000 BCE"
+                },
+                { 
+                    name: "L Shape", 
+                    pattern: [0, 3, 6, 7, 8], 
+                    points: 20, 
+                    gridSize: 9,
+                    history: "L-shaped patterns were fundamental in early European textile traditions, representing the carpenter's square - a symbol of honest work and craftsmanship in medieval guild textiles.",
+                    culture: "Medieval European",
+                    period: "800-1400 CE"
+                },
+                { 
+                    name: "Zigzag", 
+                    pattern: [0, 1, 4, 7, 8], 
+                    points: 22, 
+                    gridSize: 9,
+                    history: "Zigzag patterns symbolized lightning and divine power in ancient cultures. Found in 4000-year-old Peruvian textiles, they were believed to channel the energy of storm gods.",
+                    culture: "Ancient Peruvian",
+                    period: "2000 BCE"
+                },
+                { 
+                    name: "Border Frame", 
+                    pattern: [0, 1, 2, 3, 5, 6, 7, 8], 
+                    points: 35, 
+                    gridSize: 9,
+                    history: "Border patterns served as protective barriers in ancient textiles. Roman weavers used them to 'frame' important garments, believing they would protect the wearer from evil spirits and bad luck.",
+                    culture: "Ancient Roman",
+                    period: "100-400 CE"
+                },
+                { 
+                    name: "X Pattern", 
+                    pattern: [0, 2, 4, 6, 8], 
+                    points: 28, 
+                    gridSize: 9,
+                    history: "The X-pattern, or saltire, has been woven into textiles for over 5000 years. In Celtic tradition, it represented the crossing of paths and was woven into cloaks worn by travelers for protection.",
+                    culture: "Ancient Celtic",
+                    period: "3000 BCE"
+                }
+            ],
+            artisan: [
+                { 
+                    name: "Celtic Knot", 
+                    pattern: [0, 1, 4, 5, 8, 9, 12, 13], 
+                    points: 35, 
+                    gridSize: 16,
+                    history: "Celtic knot patterns emerged around 450 CE in Ireland and Scotland. These endless loops symbolized eternity and the interconnectedness of life. Master weavers spent years learning to create these complex interlacing patterns, which were reserved for nobility and religious ceremonies.",
+                    culture: "Celtic Ireland/Scotland",
+                    period: "450-1200 CE"
+                },
+                { 
+                    name: "Aztec Sun", 
+                    pattern: [1, 2, 4, 7, 8, 11, 13, 14], 
+                    points: 40, 
+                    gridSize: 16,
+                    history: "The Aztec sun pattern, representing Tonatiuh the sun god, was woven into ceremonial textiles from 1345-1521 CE. Only the highest-ranking priests and nobles could wear garments featuring this sacred pattern, which required rare golden threads and took months to complete.",
+                    culture: "Aztec Empire",
+                    period: "1345-1521 CE"
+                },
+                { 
+                    name: "Norse Rune", 
+                    pattern: [0, 3, 5, 6, 9, 10, 12, 15], 
+                    points: 45, 
+                    gridSize: 16,
+                    history: "Viking textile workers incorporated runic symbols into their weaving from 800-1100 CE. These patterns were believed to carry magical properties - warriors wore cloaks with runic patterns for protection in battle, and the patterns were thought to invoke the favor of Odin.",
+                    culture: "Norse/Viking",
+                    period: "800-1100 CE"
+                },
+                { 
+                    name: "Egyptian Eye", 
+                    pattern: [2, 3, 5, 6, 9, 10, 12, 13], 
+                    points: 38, 
+                    gridSize: 16,
+                    history: "The Eye of Horus pattern was woven into Egyptian textiles from 3100 BCE. This powerful symbol of protection and royal power was found in Tutankhamun's tomb wrappings. The pattern required precise mathematical calculations that only master weavers possessed.",
+                    culture: "Ancient Egyptian",
+                    period: "3100 BCE - 30 BCE"
+                },
+                { 
+                    name: "Mayan Glyph", 
+                    pattern: [1, 4, 6, 7, 8, 9, 11, 14], 
+                    points: 42, 
+                    gridSize: 16,
+                    history: "Mayan weavers created intricate glyph patterns representing their complex calendar system from 2000 BCE to 1500 CE. These textiles served as historical records, with each pattern telling stories of astronomical events, royal lineages, and religious ceremonies.",
+                    culture: "Maya Civilization",
+                    period: "2000 BCE - 1500 CE"
+                },
+                { 
+                    name: "Roman Mosaic", 
+                    pattern: [0, 2, 5, 7, 8, 10, 13, 15], 
+                    points: 44, 
+                    gridSize: 16,
+                    history: "Roman textile workers adapted mosaic patterns from floor designs into their weaving around 100-400 CE. These geometric patterns demonstrated Roman engineering precision and were worn by senators and wealthy merchants as symbols of civilization and order.",
+                    culture: "Roman Empire",
+                    period: "100-400 CE"
+                },
+                { 
+                    name: "Greek Key", 
+                    pattern: [1, 3, 4, 6, 9, 11, 12, 14], 
+                    points: 46, 
+                    gridSize: 16,
+                    history: "The Greek key (meander) pattern originated around 800 BCE and symbolized infinity and the eternal flow of life. Found on ancient Greek textiles and pottery, it was believed to represent the labyrinthine path of life and was woven into garments worn during important philosophical discussions.",
+                    culture: "Ancient Greek",
+                    period: "800-146 BCE"
+                },
+                { 
+                    name: "Persian Flower", 
+                    pattern: [2, 4, 6, 7, 8, 9, 11, 13], 
+                    points: 48, 
+                    gridSize: 16,
+                    history: "Persian floral patterns reached their peak during the Safavid dynasty (1501-1736 CE). These intricate designs represented paradise gardens and were woven into silk carpets and royal garments using techniques passed down through generations of master craftsmen in Isfahan and Kashan.",
+                    culture: "Persian/Safavid",
+                    period: "1501-1736 CE"
+                }
+            ],
+            master: [
+                { 
+                    name: "Byzantine Crown", 
+                    pattern: [2, 3, 6, 8, 11, 13, 16, 18, 21, 22], 
+                    points: 60, 
+                    gridSize: 25,
+                    history: "Byzantine crown patterns were woven into imperial silk textiles from 330-1453 CE in Constantinople. These patterns required gold and silver threads imported from across the empire. Only the imperial workshops could produce these designs, which took master weavers up to two years to complete a single garment.",
+                    culture: "Byzantine Empire",
+                    period: "330-1453 CE"
+                },
+                { 
+                    name: "Persian Carpet", 
+                    pattern: [0, 4, 5, 9, 10, 14, 15, 19, 20, 24], 
+                    points: 65, 
+                    gridSize: 25,
+                    history: "The art of Persian carpet weaving reached its zenith during the reign of Shah Abbas I (1588-1629). These patterns, featuring the 'Shah Abbas palmette,' required over 1000 knots per square inch and could take a team of master weavers 3-5 years to complete a single royal carpet.",
+                    culture: "Safavid Persia",
+                    period: "1588-1629 CE"
+                },
+                { 
+                    name: "Chinese Dragon", 
+                    pattern: [1, 3, 6, 8, 11, 13, 16, 18, 21, 23], 
+                    points: 70, 
+                    gridSize: 25,
+                    history: "Chinese dragon patterns were exclusively reserved for imperial use during the Ming (1368-1644) and Qing (1644-1912) dynasties. The five-clawed dragon could only be worn by the emperor, while four-clawed dragons were for princes. Unauthorized use was punishable by death.",
+                    culture: "Imperial China",
+                    period: "1368-1912 CE"
+                },
+                { 
+                    name: "Japanese Sakura", 
+                    pattern: [2, 7, 10, 12, 14, 17, 22], 
+                    points: 55, 
+                    gridSize: 25,
+                    history: "Sakura (cherry blossom) patterns became prominent in Japanese textiles during the Heian period (794-1185). These delicate patterns were woven into court kimonos using a technique called 'nishiki,' requiring silk threads dyed with rare safflower pigments that cost more than gold.",
+                    culture: "Heian Japan",
+                    period: "794-1185 CE"
+                },
+                { 
+                    name: "Indian Mandala", 
+                    pattern: [0, 2, 4, 10, 12, 14, 20, 22, 24], 
+                    points: 75, 
+                    gridSize: 25,
+                    history: "Mandala patterns in Indian textiles date back to 1500 BCE and represent the cosmic universe in Hindu and Buddhist traditions. Master weavers in Varanasi spent decades perfecting these sacred geometries, which were believed to bring spiritual enlightenment to both creator and wearer.",
+                    culture: "Ancient India",
+                    period: "1500 BCE - Present"
+                },
+                { 
+                    name: "Aztec Calendar", 
+                    pattern: [1, 5, 7, 9, 15, 17, 19, 23], 
+                    points: 68, 
+                    gridSize: 25,
+                    history: "The Aztec calendar stone pattern was woven into ceremonial textiles used in Tenochtitlan's Great Temple from 1427-1521 CE. These patterns encoded complex astronomical calculations and were created by the 'pochteca' - elite merchant-weavers who held the secrets of the calendar system.",
+                    culture: "Aztec Empire",
+                    period: "1427-1521 CE"
+                },
+                { 
+                    name: "Nordic Frost", 
+                    pattern: [3, 4, 8, 12, 16, 20, 21], 
+                    points: 62, 
+                    gridSize: 25,
+                    history: "Nordic frost patterns emerged in Scandinavia around 1000 CE, inspired by ice crystal formations. These patterns were woven into winter cloaks using wool from specially bred sheep. The geometric precision was believed to channel the protective power of winter spirits.",
+                    culture: "Medieval Scandinavia",
+                    period: "1000-1400 CE"
+                },
+                { 
+                    name: "Moroccan Tile", 
+                    pattern: [6, 7, 11, 13, 17, 18], 
+                    points: 58, 
+                    gridSize: 25,
+                    history: "Moroccan geometric tile patterns, known as 'taqsim,' were adapted into textiles during the Almoravid dynasty (1040-1147 CE). These mathematical patterns, based on Islamic geometric principles, were woven into prayer rugs and required knowledge of advanced mathematics.",
+                    culture: "Almoravid Morocco",
+                    period: "1040-1147 CE"
+                },
+                { 
+                    name: "Thai Silk", 
+                    pattern: [1, 9, 11, 13, 15, 23], 
+                    points: 72, 
+                    gridSize: 25,
+                    history: "Traditional Thai silk patterns reached their artistic peak during the Ayutthaya Kingdom (1351-1767 CE). The 'pha yok' technique created these intricate patterns using gold and silver threads. Master weavers were considered royal artisans and their techniques were closely guarded state secrets.",
+                    culture: "Ayutthaya Thailand",
+                    period: "1351-1767 CE"
+                },
+                { 
+                    name: "Incan Textile", 
+                    pattern: [5, 9, 10, 14, 15, 19], 
+                    points: 66, 
+                    gridSize: 25,
+                    history: "Incan textile patterns, called 'tocapu,' were a form of writing system used from 1438-1533 CE. Each pattern conveyed specific information about the wearer's status, achievements, and lineage. The finest examples, made from vicuña wool, were reserved for the Sapa Inca and required years to complete.",
+                    culture: "Inca Empire",
+                    period: "1438-1533 CE"
+                }
+            ]
+        };
+        
+        // Innovation Quiz Questions Data
+        const quizQuestions = {
+            apprentice: [
+                { question: "What is the basic tool used for weaving?", options: ["Loom", "Spindle", "Needle", "Scissors"], correct: 0, points: 10, time: 15 },
+                { question: "Which fiber comes from sheep?", options: ["Cotton", "Wool", "Silk", "Linen"], correct: 1, points: 10, time: 15 },
+                { question: "What color was most expensive in ancient times?", options: ["Red", "Blue", "Purple", "Gold"], correct: 2, points: 15, time: 15 },
+                { question: "Which plant produces cotton?", options: ["Flax", "Cotton plant", "Hemp", "Bamboo"], correct: 1, points: 10, time: 15 },
+                { question: "What insect produces silk?", options: ["Spider", "Silkworm", "Caterpillar", "Moth"], correct: 1, points: 10, time: 15 }
+            ],
+            artisan: [
+                { question: "What machine revolutionized spinning in 1764?", options: ["Water Frame", "Spinning Jenny", "Power Loom", "Cotton Gin"], correct: 1, points: 20, time: 20 },
+                { question: "What was the first synthetic fiber?", options: ["Polyester", "Nylon", "Rayon", "Acrylic"], correct: 1, points: 25, time: 20 },
+                { question: "Which country first developed silk production?", options: ["India", "Japan", "China", "Persia"], correct: 2, points: 20, time: 20 },
+                { question: "What natural dye creates indigo blue?", options: ["Woad plant", "Indigo plant", "Madder root", "Cochineal"], correct: 1, points: 25, time: 20 },
+                { question: "When was the first textile factory built?", options: ["1750s", "1760s", "1770s", "1780s"], correct: 2, points: 30, time: 25 }
+            ],
+            master: [
+                { question: "What makes spider silk 5x stronger than steel?", options: ["Protein chains", "Carbon bonds", "Crystalline structure", "Molecular alignment"], correct: 0, points: 40, time: 25 },
+                { question: "Which nanotechnology enables electrical conductivity in smart textiles?", options: ["Silver nanoparticles", "Carbon nanotubes", "Graphene sheets", "All of the above"], correct: 3, points: 50, time: 30 },
+                { question: "What punishment existed in ancient China for revealing silk secrets?", options: ["Exile", "Prison", "Death", "Heavy fine"], correct: 2, points: 35, time: 25 },
+                { question: "Which property of Kevlar makes it bulletproof?", options: ["High tensile strength", "Low density", "Chemical resistance", "Heat resistance"], correct: 0, points: 45, time: 30 },
+                { question: "What percentage of global textile production uses synthetic fibers today?", options: ["40%", "60%", "70%", "80%"], correct: 2, points: 40, time: 25 }
+            ]
+        };
+        
+        // Auto-login check
+        async function checkAutoLogin() {
+            try {
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                if (session) {
+                    console.log('Found existing session for:', session.user.email);
+                    currentUser = session.user;
+                    
+                    // Load player data
+                    const { data, error } = await supabaseClient
+                        .from('players')
+                        .select('*')
+                        .eq('user_id', session.user.id);
+                    
+                    if (data && data.length > 0) {
+                        const dbData = data[0];
+                        console.log('📥 Loaded from database:', dbData);
+                        
+                        // Convert snake_case to camelCase
+                        playerData = {
+                            email: dbData.email,
+                            name: dbData.name,
+                            level: dbData.level,
+                            rank: dbData.rank || 156,
+                            totalScore: dbData.total_score || 0,
+                            coins: dbData.coins || 0,
+                            challenges: dbData.challenges || {
+                                heritage: { best: 0, completed: false },
+                                innovation: { best: 0, completed: false },
+                                future: { best: 0, completed: false }
+                            },
+                            streak: dbData.streak || {
+                                current: 0,
+                                longest: 0,
+                                lastCompletedDate: null,
+                                todayCompleted: {
+                                    heritage: false,
+                                    innovation: false,
+                                    future: false
+                                },
+                                streakSaves: 0
+                            },
+                            lastPlayed: dbData.last_played
+                        };
+                        
+                        // Ensure streak structure exists
+                        if (!playerData.streak) {
+                            playerData.streak = {
+                                current: 0,
+                                longest: 0,
+                                lastCompletedDate: null,
+                                todayCompleted: {
+                                    heritage: false,
+                                    innovation: false,
+                                    future: false
+                                },
+                                streakSaves: 0
+                            };
+                        }
+                        
+                        // Ensure todayCompleted exists
+                        if (!playerData.streak.todayCompleted) {
+                            playerData.streak.todayCompleted = {
+                                heritage: false,
+                                innovation: false,
+                                future: false
+                            };
+                        }
+                        
+                        console.log('✅ Auto-login successful');
+                        console.log('Player data loaded:', playerData);
+                        showDashboard();
+                        startBackgroundMusic();
+                    }
+                }
+            } catch (error) {
+                console.log('No existing session found');
+            }
+        }
+
+        
+        // Login existing player
+        async function loginPlayer() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            
+            if (!email || !password) {
+                showNotification('Please enter email and password!', 'error');
+                return;
+            }
+            
+            try {
+                console.log('🔐 Logging in:', email);
+                
+                // Sign in with Supabase
+                const { data: authData, error: authError } = await supabaseClient.auth.signInWithPassword({
+                    email: email,
+                    password: password
+                });
+                
+                if (authError) throw authError;
+                
+                if (authData.user) {
+                    currentUser = authData.user;
+                    
+                    // Load player data
+                    const { data, error: dbError } = await supabaseClient
+                        .from('players')
+                        .select('*')
+                        .eq('user_id', authData.user.id);
+                    
+                    if (dbError) throw dbError;
+                    
+                    if (data && data.length > 0) {
+                        const dbData = data[0];
+                        
+                        // Convert snake_case to camelCase
+                        playerData = {
+                            email: dbData.email,
+                            name: dbData.name,
+                            level: dbData.level,
+                            rank: dbData.rank || 156,
+                            totalScore: dbData.total_score || 0,
+                            coins: dbData.coins || 0,
+                            challenges: dbData.challenges || {
+                                heritage: { best: 0, completed: false },
+                                innovation: { best: 0, completed: false },
+                                future: { best: 0, completed: false }
+                            },
+                            streak: dbData.streak || {
+                                current: 0,
+                                longest: 0,
+                                lastCompletedDate: null,
+                                todayCompleted: {
+                                    heritage: false,
+                                    innovation: false,
+                                    future: false
+                                },
+                                streakSaves: 0
+                            },
+                            lastPlayed: dbData.last_played
+                        };
+                        
+                        // Ensure streak structure
+                        if (!playerData.streak.todayCompleted) {
+                            playerData.streak.todayCompleted = {
+                                heritage: false,
+                                innovation: false,
+                                future: false
+                            };
+                        }
+                        
+                        console.log('✅ Login successful!');
+                        playSound('success');
+                        
+                        showDashboard();
+                        startBackgroundMusic();
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Login error:', error);
+                showNotification('Login failed: ' + error.message, 'error');
+            }
+        }
+        
+        // Toggle between login and register forms - Optimized
+        function showRegisterForm() {
+            const registerForm = domCache.get('register-form');
+            const loginForm = domCache.get('login-form');
+            const showRegister = domCache.get('show-register');
+            const showLogin = domCache.get('show-login');
+            
+            if (registerForm) registerForm.style.display = 'block';
+            if (loginForm) loginForm.style.display = 'none';
+            if (showRegister) showRegister.style.background = 'linear-gradient(45deg, #00d4ff, #4ecdc4)';
+            if (showLogin) showLogin.style.background = 'rgba(255,255,255,0.1)';
+        }
+        
+        function showLoginForm() {
+            const registerForm = domCache.get('register-form');
+            const loginForm = domCache.get('login-form');
+            const showRegister = domCache.get('show-register');
+            const showLogin = domCache.get('show-login');
+            
+            if (registerForm) registerForm.style.display = 'none';
+            if (loginForm) loginForm.style.display = 'block';
+            if (showRegister) showRegister.style.background = 'rgba(255,255,255,0.1)';
+            if (showLogin) showLogin.style.background = 'linear-gradient(45deg, #00d4ff, #4ecdc4)';
+        }
+        
+        // Save player data
+        async function savePlayerData() {
+            if (currentUser && playerData) {
+                try {
+                    console.log('💾 Saving player data...', playerData);
+                    
+                    // Convert camelCase to snake_case for database
+                    const dbData = {
+                        name: playerData.name,
+                        level: playerData.level,
+                        rank: playerData.rank || 156,
+                        total_score: playerData.totalScore || playerData.total_score || 0,
+                        coins: playerData.coins || 0,
+                        challenges: playerData.challenges || {
+                            heritage: { best: 0, completed: false },
+                            innovation: { best: 0, completed: false },
+                            future: { best: 0, completed: false }
+                        },
+                        streak: playerData.streak || {
+                            current: 0,
+                            longest: 0,
+                            lastCompletedDate: null,
+                            todayCompleted: {
+                                heritage: false,
+                                innovation: false,
+                                future: false
+                            },
+                            streakSaves: 0
+                        },
+                        last_played: new Date().toISOString()
+                    };
+                    
+                    console.log('📤 Sending to database:', dbData);
+                    
+                    const { error } = await supabaseClient
+                        .from('players')
+                        .update(dbData)
+                        .eq('user_id', currentUser.id);
+                    
+                    if (error) throw error;
+                    console.log('✅ Player data saved to cloud successfully');
+                } catch (error) {
+                    console.error('❌ Failed to save player data:', error);
+                    console.error('Error details:', error.message);
+                }
+            } else {
+                console.warn('⚠️ Cannot save: currentUser or playerData missing');
+            }
+        }
+        
+        // Logout function
+        async function logoutPlayer() {
+            playSound('click');
+            try {
+                await supabaseClient.auth.signOut();
+                currentUser = null;
+                playerData = {
+                    email: '',
+                    name: '',
+                    level: 'apprentice',
+                    rank: 156,
+                    totalScore: 0,
+                    coins: 0,
+                    challenges: {
+                        heritage: { best: 0, completed: false },
+                        innovation: { best: 0, completed: false },
+                        future: { best: 0, completed: false }
+                    }
+                };
+                stopBackgroundMusic();
+                document.getElementById('dashboard').classList.remove('active');
+                document.getElementById('registration').classList.add('active');
+                console.log('✅ Logged out successfully');
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        }
+        
+        // Initialize on load
+        checkAutoLogin();
         
         // Game state
         let playerData = {
@@ -2801,12 +4025,23 @@
             level: 'apprentice',
             rank: 156,
             totalScore: 0,
-            coins: 0, // New currency system
-            unlockedItems: ['👤', '👨', '👩', '🧑', '', '👓'], // Default unlocked items
+            coins: 0,
+            unlockedItems: ['👤', '👨', '👩', '🧑', '', '👓'],
             challenges: {
                 heritage: { best: 0, completed: false },
                 innovation: { best: 0, completed: false },
                 future: { best: 0, completed: false }
+            },
+            streak: {
+                current: 0,
+                longest: 0,
+                lastCompletedDate: null,
+                todayCompleted: {
+                    heritage: false,
+                    innovation: false,
+                    future: false
+                },
+                streakSaves: 0 // Number of streak saves owned
             },
             lastPlayed: null
         };
@@ -2997,11 +4232,12 @@
                 
                 console.log('Starting music theme:', theme.name);
                 
-                // Create bass line
+                // Create bass line - Optimized
                 const createBass = (frequency, duration, delay = 0) => {
+                    const settings = getGameSettings();
+                    if (!settings.music) return;
+                    
                     setTimeout(() => {
-                        const settings = getGameSettings();
-                        if (!settings.music) return;
                         
                         const now = ctx.currentTime;
                         
@@ -3261,8 +4497,8 @@
             }
         }
         
-        // Difficulty-based Heritage Challenge Data
-        const heritagePatterns = {
+        // Difficulty-based Innovation Quiz Data (continued)
+        const quizQuestions2 = {
             apprentice: [
                 { name: "Simple Weave", pattern: [0, 1, 4, 5], points: 10, gridSize: 9 },
                 { name: "Basic Cross", pattern: [1, 3, 4, 5, 7], points: 15, gridSize: 9 },
@@ -3301,111 +4537,6 @@
             ]
         };
         
-        let currentPattern = null;
-        let playerPattern = [];
-        let heritageSpeedRun = {
-            patternsCompleted: 0,
-            totalScore: 0,
-            usedPatterns: []
-        };
-        
-        // Difficulty-based Innovation Quiz Data
-        const quizQuestions = {
-            apprentice: [
-                {
-                    question: "What is the basic tool used for weaving?",
-                    options: ["Loom", "Spindle", "Needle", "Scissors"],
-                    correct: 0,
-                    points: 20,
-                    time: 30
-                },
-                {
-                    question: "Which fiber comes from sheep?",
-                    options: ["Cotton", "Silk", "Wool", "Linen"],
-                    correct: 2,
-                    points: 20,
-                    time: 30
-                },
-                {
-                    question: "What color was traditionally the most expensive dye?",
-                    options: ["Red", "Blue", "Purple", "Green"],
-                    correct: 2,
-                    points: 25,
-                    time: 25
-                }
-            ],
-            artisan: [
-                {
-                    question: "Which innovation revolutionized textile production in the 18th century?",
-                    options: ["Steam Engine", "Spinning Jenny", "Telegraph", "Printing Press"],
-                    correct: 1,
-                    points: 35,
-                    time: 20
-                },
-                {
-                    question: "What was the first fully synthetic fiber?",
-                    options: ["Rayon", "Nylon", "Polyester", "Acrylic"],
-                    correct: 1,
-                    points: 40,
-                    time: 20
-                },
-                {
-                    question: "The Silk Road primarily facilitated trade in which textile?",
-                    options: ["Cotton", "Wool", "Silk", "Linen"],
-                    correct: 2,
-                    points: 30,
-                    time: 18
-                },
-                {
-                    question: "Which process turns fiber into yarn?",
-                    options: ["Weaving", "Spinning", "Dyeing", "Carding"],
-                    correct: 1,
-                    points: 35,
-                    time: 18
-                }
-            ],
-            master: [
-                {
-                    question: "What molecular structure gives thermochromic materials their color-changing properties?",
-                    options: ["Crystalline lattice disruption", "Electron orbital transitions", "Polymer chain reorganization", "Photonic band gap shifts"],
-                    correct: 2,
-                    points: 60,
-                    time: 15
-                },
-                {
-                    question: "Which weaving technique creates the strongest fabric structure?",
-                    options: ["Plain weave", "Twill weave", "Satin weave", "Ripstop weave"],
-                    correct: 3,
-                    points: 55,
-                    time: 12
-                },
-                {
-                    question: "What is the primary advantage of using carbon nanotubes in smart textiles?",
-                    options: ["Color variation", "Electrical conductivity", "Water resistance", "UV protection"],
-                    correct: 1,
-                    points: 70,
-                    time: 12
-                },
-                {
-                    question: "Which ancient civilization first developed silk production techniques?",
-                    options: ["Egypt", "Mesopotamia", "China", "India"],
-                    correct: 2,
-                    points: 50,
-                    time: 10
-                },
-                {
-                    question: "What is the tensile strength difference between spider silk and steel?",
-                    options: ["Spider silk is 2x stronger", "Steel is 3x stronger", "Spider silk is 5x stronger", "They are equal"],
-                    correct: 2,
-                    points: 65,
-                    time: 10
-                }
-            ]
-        };
-        
-        let currentQuestionIndex = 0;
-        let quizScore = 0;
-        let quizStreak = 0;
         
         // Future Challenge Data
         let canvas, ctx;
@@ -3425,18 +4556,7 @@
             localStorage.setItem(STORAGE_KEY, JSON.stringify(players));
         }
         
-        async function savePlayerData() {
-            // Save current player data to Firebase
-            const user = auth.currentUser;
-            if (user && playerData) {
-                try {
-                    await db.collection('users').doc(user.uid).update(playerData);
-                    console.log('Player data saved to Firebase');
-                } catch (error) {
-                    console.error('Error saving player data:', error);
-                }
-            }
-        }
+
         
         function getPlayer(email) {
             const players = getAllPlayers();
@@ -3482,56 +4602,89 @@
             // Validation
             if (!email || !name || !password) {
                 playSound('error');
-                alert('Please fill in all fields!');
+                showNotification('Please fill in all fields!', 'error');
                 return;
             }
             
             if (!email.includes('@') || !email.includes('.')) {
                 playSound('error');
-                alert('Please enter a valid email address!');
+                showNotification('Please enter a valid email address!', 'error');
                 return;
             }
             
             if (password.length < 6) {
                 playSound('error');
-                alert('Password must be at least 6 characters long!');
+                showNotification('Password must be at least 6 characters long!', 'error');
                 return;
             }
             
             try {
-                // Create Firebase user
-                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-                const user = userCredential.user;
+                console.log('Creating user account for:', email);
                 
-                console.log('Firebase user created:', user.uid);
+                // Sign up with Supabase Auth
+                const { data: authData, error: authError } = await supabaseClient.auth.signUp({
+                    email: email,
+                    password: password
+                });
+                
+                if (authError) throw authError;
+                
+                console.log('✅ Supabase user created:', authData.user.id);
                 
                 // Create player data
                 const newPlayer = {
-                    uid: user.uid,
+                    user_id: authData.user.id,
                     email: email,
                     name: name,
                     level: level,
                     rank: Math.floor(Math.random() * 500) + 50,
-                    totalScore: 0,
+                    total_score: 0,
                     coins: 0,
                     challenges: {
                         heritage: { best: 0, completed: false },
                         innovation: { best: 0, completed: false },
                         future: { best: 0, completed: false }
                     },
-                    createdAt: new Date().toISOString(),
-                    lastPlayed: new Date().toISOString()
+                    streak: {
+                        current: 0,
+                        longest: 0,
+                        lastCompletedDate: null,
+                        todayCompleted: { heritage: false, innovation: false, future: false },
+                        streakSaves: 0
+                    },
+                    created_at: new Date().toISOString(),
+                    last_played: new Date().toISOString()
                 };
                 
-                // Save to Firestore
-                await db.collection('users').doc(user.uid).set(newPlayer);
-                console.log('Player data saved to Firestore');
+                console.log('Saving player data to Supabase:', newPlayer);
                 
-                // Load player data
-                playerData = { ...newPlayer };
+                // Save to Supabase database
+                const { error: dbError } = await supabaseClient
+                    .from('players')
+                    .insert([newPlayer]);
+                
+                if (dbError) throw dbError;
+                
+                console.log('✅ Player data saved to cloud database');
+                
+                currentUser = authData.user;
+                
+                // Load player data (convert snake_case to camelCase for compatibility)
+                playerData = {
+                    email: newPlayer.email,
+                    name: newPlayer.name,
+                    level: newPlayer.level,
+                    rank: newPlayer.rank,
+                    totalScore: newPlayer.total_score,
+                    coins: newPlayer.coins,
+                    challenges: newPlayer.challenges,
+                    streak: newPlayer.streak,
+                    createdAt: newPlayer.created_at,
+                    lastPlayed: newPlayer.last_played
+                };
                 
                 playSound('success');
-                alert(`Welcome to Chronoweave, ${name}! Your account has been created.`);
+                showNotification(`Welcome to Chronoweave, ${name}! Your account has been created.`, 'success', 5000);
                 showDashboard();
                 startBackgroundMusic();
                 
@@ -3539,11 +4692,11 @@
                 console.error('Registration error:', error);
                 playSound('error');
                 
-                if (error.code === 'auth/email-already-in-use') {
-                    alert('This email is already registered! Please login instead.');
+                if (error.message.includes('already registered')) {
+                    showNotification('This email is already registered! Please login instead.', 'warning');
                     showLoginForm();
                 } else {
-                    alert('Registration failed: ' + error.message);
+                    showNotification('Registration failed: ' + error.message, 'error');
                 }
             }
         }
@@ -3557,94 +4710,124 @@
             
             if (!email || !password) {
                 playSound('error');
-                alert('Please enter your email and password!');
+                showNotification('Please enter your email and password!', 'error');
                 return;
             }
             
             try {
-                // Sign in with Firebase
-                const userCredential = await auth.signInWithEmailAndPassword(email, password);
-                const user = userCredential.user;
+                console.log('Attempting login with email:', email);
                 
-                console.log('Firebase user logged in:', user.uid);
+                // Sign in with Supabase Auth
+                const { data: authData, error: authError } = await supabaseClient.auth.signInWithPassword({
+                    email: email,
+                    password: password
+                });
                 
-                // Get player data from Firestore
-                const doc = await db.collection('users').doc(user.uid).get();
+                if (authError) throw authError;
                 
-                if (doc.exists) {
-                    const player = doc.data();
-                    
-                    // Update last played
-                    player.lastPlayed = new Date().toISOString();
-                    await db.collection('users').doc(user.uid).update({ lastPlayed: player.lastPlayed });
-                    
-                    // Load player data
-                    playerData = { ...player };
-                    
-                    playSound('success');
-                    alert(`Welcome back, ${player.name}!`);
-                    showDashboard();
-                    startBackgroundMusic();
-                } else {
-                    playSound('error');
-                    alert('Player data not found. Please contact support.');
+                console.log('✅ User authenticated:', authData.user.id);
+                
+                currentUser = authData.user;
+                
+                // Get player data from database
+                const { data: playerRecords, error: dbError } = await supabaseClient
+                    .from('players')
+                    .select('*')
+                    .eq('user_id', authData.user.id);
+                
+                if (dbError) throw dbError;
+                
+                if (!playerRecords || playerRecords.length === 0) {
+                    throw new Error('No player data found. Please register first.');
                 }
+                
+                const playerRecord = playerRecords[0];
+                
+                console.log('✅ Player data loaded from cloud:', playerRecord);
+                
+                // Update last played
+                await supabaseClient
+                    .from('players')
+                    .update({ last_played: new Date().toISOString() })
+                    .eq('user_id', authData.user.id);
+                
+                // Load player data (convert snake_case to camelCase)
+                playerData = {
+                    email: playerRecord.email,
+                    name: playerRecord.name,
+                    level: playerRecord.level,
+                    rank: playerRecord.rank,
+                    totalScore: playerRecord.total_score,
+                    coins: playerRecord.coins,
+                    challenges: playerRecord.challenges,
+                    streak: playerRecord.streak || {
+                        current: 0,
+                        longest: 0,
+                        lastCompletedDate: null,
+                        todayCompleted: { heritage: false, innovation: false, future: false },
+                        streakSaves: 0
+                    },
+                    createdAt: playerRecord.created_at,
+                    lastPlayed: new Date().toISOString()
+                };
+                
+                console.log('✅ Player data loaded into game:', playerData);
+                
+                playSound('success');
+                showNotification(`Welcome back, ${playerData.name}!`, 'success', 4000);
+                showDashboard();
+                startBackgroundMusic();
                 
             } catch (error) {
                 console.error('Login error:', error);
                 playSound('error');
                 
-                if (error.code === 'auth/user-not-found') {
-                    alert('No account found with this email. Please register first!');
-                    showRegisterForm();
-                } else if (error.code === 'auth/wrong-password') {
-                    alert('Incorrect password! Please try again.');
+                if (error.message.includes('Invalid login credentials')) {
+                    showNotification('Incorrect email or password! Please try again.', 'error');
+                } else if (error.message.includes('Email not confirmed')) {
+                    showNotification('Please check your email to confirm your account!', 'warning');
                 } else {
-                    alert('Login failed: ' + error.message);
+                    showNotification('Login failed: ' + error.message, 'error');
                 }
             }
         }
         
-        // Auto-login if user is already logged in
-        auth.onAuthStateChanged(async (user) => {
-            if (user) {
-                console.log('User already logged in:', user.uid);
-                try {
-                    const doc = await db.collection('users').doc(user.uid).get();
-                    if (doc.exists) {
-                        playerData = { ...doc.data() };
-                        showDashboard();
-                    }
-                } catch (error) {
-                    console.error('Auto-login error:', error);
-                }
-            }
-        });
-        
         function showDashboard() {
-            document.getElementById('registration').classList.remove('active');
-            document.getElementById('dashboard').classList.add('active');
+            const registration = domCache.get('registration');
+            const dashboard = domCache.get('dashboard');
+            const welcomeText = domCache.get('welcome-text');
+            const playerEmail = domCache.get('player-email');
+            const totalScore = domCache.get('total-score');
+            const playerLevel = domCache.get('player-level');
+            const lastPlayed = domCache.get('last-played');
+            
+            if (registration) registration.classList.remove('active');
+            if (dashboard) dashboard.classList.add('active');
             
             // Display avatar if exists
-            if (playerData.avatar) {
-                const avatarDisplay = playerData.avatar.accessory 
-                    ? `${playerData.avatar.skin}${playerData.avatar.accessory}` 
-                    : playerData.avatar.skin;
-                document.getElementById('welcome-text').innerHTML = `${avatarDisplay} Welcome, ${playerData.name}!`;
-            } else {
-                document.getElementById('welcome-text').textContent = `Welcome, ${playerData.name}!`;
+            if (welcomeText) {
+                if (playerData.avatar) {
+                    const avatarDisplay = playerData.avatar.accessory 
+                        ? `${playerData.avatar.skin}${playerData.avatar.accessory}` 
+                        : playerData.avatar.skin;
+                    welcomeText.innerHTML = `${avatarDisplay} Welcome, ${playerData.name}!`;
+                } else {
+                    welcomeText.textContent = `Welcome, ${playerData.name}!`;
+                }
             }
             
-            document.getElementById('player-email').textContent = playerData.email;
-            document.getElementById('player-rank').textContent = `#${playerData.rank}`;
-            document.getElementById('total-score').textContent = playerData.totalScore;
-            document.getElementById('player-level').textContent = playerData.level.charAt(0).toUpperCase() + playerData.level.slice(1);
+            if (playerEmail) playerEmail.textContent = playerData.email;
+            if (totalScore) totalScore.textContent = playerData.totalScore;
+            if (playerLevel) playerLevel.textContent = playerData.level.charAt(0).toUpperCase() + playerData.level.slice(1);
+            
+            // Calculate actual rank from database
+            updatePlayerRank();
             
             // Format last played time
-            if (playerData.lastPlayed) {
-                const lastPlayed = new Date(playerData.lastPlayed);
+            if (playerData.lastPlayed && lastPlayed) {
+                const lastPlayedDate = new Date(playerData.lastPlayed);
                 const now = new Date();
-                const diffMs = now - lastPlayed;
+                const diffMs = now - lastPlayedDate;
                 const diffMins = Math.floor(diffMs / 60000);
                 const diffHours = Math.floor(diffMs / 3600000);
                 const diffDays = Math.floor(diffMs / 86400000);
@@ -3658,36 +4841,179 @@
                     timeText = `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
                 }
                 
-                document.getElementById('last-played').textContent = timeText;
+                lastPlayed.textContent = timeText;
             }
             
             updateChallengeStats();
             updateCoinDisplay();
+            checkAndUpdateStreak();
+            updateStreakDisplay();
+            
+            // Add challenge card click handlers with event delegation
+            const challengeContainer = document.querySelector('.challenges-grid');
+            if (challengeContainer && !challengeContainer.hasEventListener) {
+                challengeContainer.addEventListener('click', function(e) {
+                    const card = e.target.closest('.challenge-card');
+                    if (card) {
+                        const type = card.getAttribute('data-challenge');
+                        startChallenge(type);
+                    }
+                });
+                challengeContainer.hasEventListener = true;
+            }
         }
         
         function updateChallengeStats() {
-            document.getElementById('heritage-best').textContent = playerData.challenges.heritage.best;
-            document.getElementById('innovation-best').textContent = playerData.challenges.innovation.best;
-            document.getElementById('future-best').textContent = playerData.challenges.future.best;
+            const heritageBest = domCache.get('heritage-best');
+            const innovationBest = domCache.get('innovation-best');
+            const futureBest = domCache.get('future-best');
+            const challengesCompleted = domCache.get('challenges-completed');
+            
+            if (heritageBest) heritageBest.textContent = playerData.challenges.heritage.best;
+            if (innovationBest) innovationBest.textContent = playerData.challenges.innovation.best;
+            if (futureBest) futureBest.textContent = playerData.challenges.future.best;
             
             const completed = Object.values(playerData.challenges).filter(c => c.completed).length;
-            document.getElementById('challenges-completed').textContent = `${completed}/3`;
+            if (challengesCompleted) challengesCompleted.textContent = `${completed}/3`;
+        }
+        
+        // Streak System Functions
+        function checkAndUpdateStreak() {
+            if (!playerData.streak) {
+                playerData.streak = {
+                    current: 0,
+                    longest: 0,
+                    lastCompletedDate: null,
+                    todayCompleted: { heritage: false, innovation: false, future: false },
+                    streakSaves: 0
+                };
+            }
+            
+            const today = new Date().toDateString();
+            const lastDate = playerData.streak.lastCompletedDate ? new Date(playerData.streak.lastCompletedDate).toDateString() : null;
+            
+            // Check if it's a new day
+            if (lastDate !== today) {
+                // Reset today's completed challenges
+                playerData.streak.todayCompleted = {
+                    heritage: false,
+                    innovation: false,
+                    future: false
+                };
+                
+                // Check if streak should break
+                if (lastDate) {
+                    const yesterday = new Date();
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    const yesterdayStr = yesterday.toDateString();
+                    
+                    if (lastDate !== yesterdayStr) {
+                        // Missed a day - check for streak save
+                        if (playerData.streak.streakSaves > 0) {
+                            playerData.streak.streakSaves--;
+                            console.log('🛡️ Streak saved! Remaining saves:', playerData.streak.streakSaves);
+                            showSuccessMessage('🛡️ Streak Save used! Your streak is protected!');
+                        } else {
+                            // Break streak
+                            console.log('💔 Streak broken!');
+                            playerData.streak.current = 0;
+                            showErrorMessage('💔 Streak broken! Complete all 3 challenges daily to maintain your streak.');
+                        }
+                    }
+                }
+            }
+        }
+        
+        function updateStreakProgress() {
+            const allCompleted = playerData.streak.todayCompleted.heritage && 
+                                 playerData.streak.todayCompleted.innovation && 
+                                 playerData.streak.todayCompleted.future;
+            
+            if (allCompleted) {
+                const today = new Date().toDateString();
+                const lastDate = playerData.streak.lastCompletedDate ? new Date(playerData.streak.lastCompletedDate).toDateString() : null;
+                
+                // Only increment if we haven't already counted today
+                if (lastDate !== today) {
+                    playerData.streak.current++;
+                    playerData.streak.lastCompletedDate = new Date().toISOString();
+                    
+                    if (playerData.streak.current > playerData.streak.longest) {
+                        playerData.streak.longest = playerData.streak.current;
+                    }
+                    
+                    // Award bonus coins for streak milestones
+                    if (playerData.streak.current % 7 === 0) {
+                        const bonus = 100 * (playerData.streak.current / 7);
+                        awardCoins(bonus, `🔥 ${playerData.streak.current} day streak bonus!`);
+                    }
+                    
+                    console.log('🔥 Streak updated:', playerData.streak.current);
+                    showSuccessMessage(`🔥 Streak: ${playerData.streak.current} days! Keep it up!`);
+                    savePlayerData();
+                }
+            }
+            
+            updateStreakDisplay();
+        }
+        
+        function updateStreakDisplay() {
+            if (!playerData.streak) return;
+            
+            document.getElementById('current-streak').textContent = playerData.streak.current;
+            document.getElementById('longest-streak').textContent = playerData.streak.longest;
+            document.getElementById('streak-saves').textContent = playerData.streak.streakSaves;
+            
+            // Update today's progress icons
+            const heritageIcon = document.getElementById('streak-heritage');
+            const innovationIcon = document.getElementById('streak-innovation');
+            const futureIcon = document.getElementById('streak-future');
+            
+            if (heritageIcon) heritageIcon.style.opacity = playerData.streak.todayCompleted.heritage ? '1' : '0.3';
+            if (innovationIcon) innovationIcon.style.opacity = playerData.streak.todayCompleted.innovation ? '1' : '0.3';
+            if (futureIcon) futureIcon.style.opacity = playerData.streak.todayCompleted.future ? '1' : '0.3';
+        }
+        
+        function buyStreakSave() {
+            playSound('click');
+            
+            const cost = 500;
+            
+            if (playerData.coins < cost) {
+                playSound('error');
+                showNotification(`Not enough coins! You need ${cost} coins to buy a Streak Save. You have: ${playerData.coins} coins`, 'error', 5000);
+                return;
+            }
+            
+            playerData.coins -= cost;
+            playerData.streak.streakSaves++;
+            
+            updateCoinDisplay();
+            updateStreakDisplay();
+            savePlayerData();
+            
+            playSound('success');
+            showSuccessMessage(`🛡️ Streak Save purchased! You now have ${playerData.streak.streakSaves} saves.`);
         }
         
         function saveProgress() {
             if (!playerData.email) {
-                alert('No player logged in!');
+                showNotification('No player logged in!', 'error');
                 return;
             }
             
             playerData.lastPlayed = new Date().toISOString();
             savePlayer(playerData.email, playerData);
             
-            alert('✓ Progress saved successfully!');
+            showNotification('Progress saved successfully!', 'success');
         }
         
         async function logoutPlayer() {
+            console.log('Logout button clicked');
+            playSound('click');
+            
             if (confirm('Are you sure you want to logout? Make sure your progress is saved!')) {
+                console.log('User confirmed logout');
                 // Save before logout
                 await savePlayerData();
                 
@@ -3722,7 +5048,7 @@
                 document.getElementById('login-email').value = '';
                 document.getElementById('login-password').value = '';
                 
-                alert('You have been logged out. See you next time!');
+                showNotification('You have been logged out. See you next time!', 'info', 4000);
             }
         }
         
@@ -3933,7 +5259,7 @@
             playSound('success');
             playerData.avatar = { ...avatarData };
             autoSaveProgress();
-            alert('✓ Avatar saved successfully!');
+            showNotification('Avatar saved successfully!', 'success');
             
             // Update dashboard avatar display
             updateDashboardAvatar();
@@ -3951,6 +5277,189 @@
         }
         
         // Settings Functions
+        // Start Challenge
+        function startChallenge(type) {
+            playSound('click');
+            currentChallenge = type;
+            
+            document.getElementById('dashboard').classList.remove('active');
+            document.getElementById(`${type}-challenge`).classList.add('active');
+            
+            // Start appropriate challenge
+            if (type === 'heritage') {
+                initHeritageChallenge();
+            } else if (type === 'innovation') {
+                initInnovationChallenge();
+            } else if (type === 'future') {
+                initFutureChallenge();
+            }
+        }
+        
+        // Update player rank from database
+        async function updatePlayerRank() {
+            try {
+                const { data: allPlayers, error } = await supabaseClient
+                    .from('players')
+                    .select('email, total_score')
+                    .order('total_score', { ascending: false });
+                
+                if (error) throw error;
+                
+                if (allPlayers && allPlayers.length > 0) {
+                    const rank = allPlayers.findIndex(p => p.email === playerData.email) + 1;
+                    if (rank > 0) {
+                        playerData.rank = rank;
+                        document.getElementById('player-rank').textContent = `#${rank}`;
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating rank:', error);
+                // Fallback to stored rank
+                document.getElementById('player-rank').textContent = `#${playerData.rank}`;
+            }
+        }
+        
+        // Leaderboard Functions
+        async function openLeaderboard() {
+            playSound('click');
+            
+            document.getElementById('dashboard').classList.remove('active');
+            document.getElementById('leaderboard').classList.add('active');
+            
+            await loadLeaderboard();
+        }
+        
+        function closeLeaderboard() {
+            playSound('click');
+            document.getElementById('leaderboard').classList.remove('active');
+            document.getElementById('dashboard').classList.add('active');
+        }
+        
+        async function loadLeaderboard() {
+            try {
+                // Get start of current week (Monday)
+                const now = new Date();
+                const dayOfWeek = now.getDay();
+                const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Adjust to Monday
+                const monday = new Date(now);
+                monday.setDate(now.getDate() + diff);
+                monday.setHours(0, 0, 0, 0);
+                
+                console.log('Loading leaderboard for week starting:', monday);
+                
+                // Get all players and their weekly scores
+                const { data: allPlayers, error } = await supabaseClient
+                    .from('players')
+                    .select('name, total_score, email, last_played')
+                    .order('total_score', { ascending: false });
+                
+                if (error) throw error;
+                
+                if (!allPlayers || allPlayers.length === 0) {
+                    document.getElementById('leaderboard-list').innerHTML = `
+                        <div style="text-align: center; color: #a0a0a0; padding: 2rem;">
+                            No players found. Be the first to play!
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Find current player's rank
+                const currentPlayerEmail = playerData.email;
+                let playerRank = allPlayers.findIndex(p => p.email === currentPlayerEmail) + 1;
+                
+                if (playerRank === 0) playerRank = allPlayers.length;
+                
+                // Update player's rank display
+                document.getElementById('leaderboard-your-rank').textContent = `#${playerRank}`;
+                document.getElementById('leaderboard-your-score').textContent = playerData.totalScore;
+                
+                // Get players to display (5 above, current, 5 below)
+                const startIndex = Math.max(0, playerRank - 6);
+                const endIndex = Math.min(allPlayers.length, playerRank + 5);
+                const playersToShow = allPlayers.slice(startIndex, endIndex);
+                
+                // Build leaderboard HTML
+                let leaderboardHTML = '';
+                
+                playersToShow.forEach((player, index) => {
+                    const actualRank = startIndex + index + 1;
+                    const isCurrentPlayer = player.email === currentPlayerEmail;
+                    
+                    // Medal for top 3
+                    let rankDisplay = `#${actualRank}`;
+                    if (actualRank === 1) rankDisplay = '🥇';
+                    else if (actualRank === 2) rankDisplay = '🥈';
+                    else if (actualRank === 3) rankDisplay = '🥉';
+                    
+                    const bgColor = isCurrentPlayer ? 'rgba(0, 212, 255, 0.3)' : 'rgba(255, 255, 255, 0.05)';
+                    const borderColor = isCurrentPlayer ? 'rgba(0, 212, 255, 0.6)' : 'rgba(255, 255, 255, 0.1)';
+                    
+                    leaderboardHTML += `
+                        <div style="
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            padding: 1rem;
+                            margin: 0.5rem 0;
+                            background: ${bgColor};
+                            border: 2px solid ${borderColor};
+                            border-radius: 10px;
+                            transition: all 0.3s ease;
+                        ">
+                            <div style="display: flex; align-items: center; gap: 1rem; flex: 1;">
+                                <div style="font-size: 1.5rem; font-weight: 700; min-width: 50px; text-align: center;">
+                                    ${rankDisplay}
+                                </div>
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 600; color: ${isCurrentPlayer ? '#00d4ff' : '#fff'};">
+                                        ${player.name} ${isCurrentPlayer ? '(You)' : ''}
+                                    </div>
+                                    <div style="font-size: 0.8rem; color: #a0a0a0;">
+                                        Last played: ${formatTimeAgo(player.last_played)}
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 1.3rem; font-weight: 700; color: #ffd700;">
+                                    ${player.total_score}
+                                </div>
+                                <div style="font-size: 0.8rem; color: #a0a0a0;">
+                                    points
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                document.getElementById('leaderboard-list').innerHTML = leaderboardHTML;
+                
+            } catch (error) {
+                console.error('Error loading leaderboard:', error);
+                document.getElementById('leaderboard-list').innerHTML = `
+                    <div style="text-align: center; color: #ff6b6b; padding: 2rem;">
+                        Failed to load leaderboard. Please try again.
+                    </div>
+                `;
+            }
+        }
+        
+        function formatTimeAgo(dateString) {
+            if (!dateString) return 'Never';
+            
+            const date = new Date(dateString);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+            
+            if (diffDays > 0) return `${diffDays}d ago`;
+            if (diffHours > 0) return `${diffHours}h ago`;
+            if (diffMins > 0) return `${diffMins}m ago`;
+            return 'Just now';
+        }
+        
         function openSettings() {
             console.log('Opening settings...');
             
@@ -3963,7 +5472,7 @@
                 
                 if (!dashboard || !settings) {
                     console.error('Dashboard or Settings element not found!');
-                    alert('Error: Settings page not found. Please refresh the page.');
+                    showNotification('Error: Settings page not found. Please refresh the page.', 'error');
                     return;
                 }
                 
@@ -4000,7 +5509,7 @@
                 console.log('Settings loaded successfully');
             } catch (error) {
                 console.error('Error opening settings:', error);
-                alert('Error opening settings: ' + error.message);
+                showNotification('Error opening settings: ' + error.message, 'error');
             }
         }
         
@@ -4019,7 +5528,7 @@
             const newLevel = document.getElementById('settings-level').value;
             
             if (!newName) {
-                alert('Player name cannot be empty!');
+                showNotification('Player name cannot be empty!', 'error');
                 return;
             }
             
@@ -4031,9 +5540,9 @@
             autoSaveProgress();
             
             if (oldLevel !== newLevel) {
-                alert(`Account updated! Difficulty changed to ${newLevel}. Your next challenges will use this difficulty level.`);
+                showNotification(`Account updated! Difficulty changed to ${newLevel}. Your next challenges will use this difficulty level.`, 'success', 6000);
             } else {
-                alert('Account settings updated successfully!');
+                showNotification('Account settings updated successfully!', 'success');
             }
             
             refreshDashboardStats();
@@ -4056,43 +5565,103 @@
             }
             
             playSound('success');
-            alert(`Game settings saved! Music theme: ${musicThemes[gameSettings.musicTheme].name}`);
+            showNotification(`Game settings saved! Music theme: ${musicThemes[gameSettings.musicTheme].name}`, 'success');
         }
         
-        function changePassword() {
+        async function changePassword() {
+            playSound('click');
+            
             const currentPassword = document.getElementById('settings-current-password').value;
             const newPassword = document.getElementById('settings-new-password').value;
             const confirmPassword = document.getElementById('settings-confirm-password').value;
             
             if (!currentPassword || !newPassword || !confirmPassword) {
-                alert('Please fill in all password fields!');
-                return;
-            }
-            
-            if (currentPassword !== playerData.password) {
-                alert('Current password is incorrect!');
+                playSound('error');
+                showNotification('Please fill in all password fields!', 'error');
                 return;
             }
             
             if (newPassword.length < 6) {
-                alert('New password must be at least 6 characters long!');
+                playSound('error');
+                showNotification('New password must be at least 6 characters long!', 'error');
                 return;
             }
             
             if (newPassword !== confirmPassword) {
-                alert('New passwords do not match!');
+                playSound('error');
+                showNotification('New passwords do not match!', 'error');
                 return;
             }
             
-            playerData.password = newPassword;
-            autoSaveProgress();
+            // Show confirmation notification
+            showNotification('Changing password...', 'info', 2000);
             
-            // Clear fields
-            document.getElementById('settings-current-password').value = '';
-            document.getElementById('settings-new-password').value = '';
-            document.getElementById('settings-confirm-password').value = '';
+            try {
+                console.log('🔐 Attempting to change password...');
+                
+                // Update password in Supabase (this will send a confirmation email if email confirmation is enabled)
+                const { error: updateError } = await supabaseClient.auth.updateUser({
+                    password: newPassword
+                });
+                
+                if (updateError) {
+                    throw updateError;
+                }
+                
+                // Clear fields
+                document.getElementById('settings-current-password').value = '';
+                document.getElementById('settings-new-password').value = '';
+                document.getElementById('settings-confirm-password').value = '';
+                
+                playSound('success');
+                showNotification('Password changed successfully! You can now use your new password to log in.', 'success', 5000);
+                
+                console.log('✅ Password changed successfully');
+                
+            } catch (error) {
+                console.error('❌ Password change error:', error);
+                playSound('error');
+                
+                let errorMessage = 'Failed to change password.';
+                if (error.message.includes('Invalid login credentials')) {
+                    errorMessage = 'Current password is incorrect!';
+                } else if (error.message.includes('Password should be at least')) {
+                    errorMessage = 'Password must be at least 6 characters long!';
+                } else if (error.message) {
+                    errorMessage = error.message;
+                }
+                
+                showNotification(errorMessage, 'error');
+            }
+        }
+        
+        function validatePasswordFields() {
+            const newPassword = document.getElementById('settings-new-password').value;
+            const confirmPassword = document.getElementById('settings-confirm-password').value;
+            const indicator = document.getElementById('password-match-indicator');
+            const changeBtn = document.getElementById('change-password-btn');
             
-            alert('Password changed successfully!');
+            if (!newPassword || !confirmPassword) {
+                indicator.textContent = '';
+                return;
+            }
+            
+            if (newPassword.length < 6) {
+                indicator.innerHTML = '❌ Password must be at least 6 characters';
+                indicator.style.color = '#ff6b6b';
+                if (changeBtn) changeBtn.disabled = true;
+                return;
+            }
+            
+            if (newPassword === confirmPassword) {
+                indicator.innerHTML = '✅ Passwords match';
+                indicator.style.color = '#4caf50';
+                if (changeBtn) changeBtn.disabled = false;
+            } else {
+                indicator.innerHTML = '❌ Passwords do not match';
+                indicator.style.color = '#ff6b6b';
+                if (changeBtn) changeBtn.disabled = true;
+            }
         }
         
         function loadStatistics() {
@@ -4140,7 +5709,7 @@
             autoSaveProgress();
             refreshDashboardStats();
             
-            alert('All progress has been reset. Good luck on your new journey!');
+            showNotification('All progress has been reset. Good luck on your new journey!', 'info', 5000);
             closeSettings();
         }
         
@@ -4152,7 +5721,7 @@
             const confirmEmail = prompt('Type your email address to confirm deletion:');
             
             if (confirmEmail !== playerData.email) {
-                alert('Email does not match. Account deletion cancelled.');
+                showNotification('Email does not match. Account deletion cancelled.', 'warning');
                 return;
             }
             
@@ -4181,7 +5750,7 @@
             document.getElementById('settings').classList.remove('active');
             document.getElementById('registration').classList.add('active');
             
-            alert('Your account has been permanently deleted. Thank you for playing Chronoweave!');
+            showNotification('Your account has been permanently deleted. Thank you for playing Chronoweave!', 'info', 6000);
         }
         
         function returnToDashboard() {
@@ -4208,13 +5777,21 @@
             document.getElementById('player-level').textContent = playerData.level.charAt(0).toUpperCase() + playerData.level.slice(1);
             updateChallengeStats();
             updateCoinDisplay();
+            updateStreakIcons();
+            
+            // Update streak numbers
+            if (playerData.streak) {
+                document.getElementById('current-streak').textContent = playerData.streak.current || 0;
+                document.getElementById('longest-streak').textContent = playerData.streak.longest || 0;
+                document.getElementById('streak-saves').textContent = playerData.streak.streakSaves || 0;
+            }
         }
         
         // Auto-save function with visual feedback
-        function autoSaveProgress() {
-            if (playerData.email) {
+        async function autoSaveProgress() {
+            if (currentUser && playerData) {
                 playerData.lastPlayed = new Date().toISOString();
-                savePlayer(playerData.email, playerData);
+                await savePlayerData();
                 console.log('✓ Progress auto-saved at', new Date().toLocaleTimeString());
                 
                 // Show visual feedback
@@ -4223,53 +5800,285 @@
         }
         
         // Show save notification
-        function showSaveNotification() {
-            // Create notification element if it doesn't exist
-            let notification = document.getElementById('save-notification');
-            if (!notification) {
-                notification = document.createElement('div');
-                notification.id = 'save-notification';
-                notification.style.cssText = `
+        // Enhanced Notification System
+        let notificationContainer = null;
+        let notificationQueue = [];
+        let isShowingNotification = false;
+        
+        function createNotificationContainer() {
+            if (!notificationContainer) {
+                notificationContainer = document.createElement('div');
+                notificationContainer.id = 'notification-container';
+                notificationContainer.style.cssText = `
                     position: fixed;
                     top: 20px;
                     right: 20px;
-                    background: rgba(76, 175, 80, 0.9);
-                    color: white;
-                    padding: 1rem 1.5rem;
-                    border-radius: 10px;
-                    font-family: 'Orbitron', monospace;
-                    font-weight: 600;
                     z-index: 10000;
-                    opacity: 0;
-                    transition: opacity 0.3s ease;
-                    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+                    pointer-events: none;
                 `;
-                notification.innerHTML = '💾 Progress Saved';
-                document.body.appendChild(notification);
+                document.body.appendChild(notificationContainer);
+            }
+        }
+        
+        function showNotification(message, type = 'info', duration = 4000) {
+            createNotificationContainer();
+            
+            const notification = document.createElement('div');
+            notification.className = 'game-notification';
+            
+            // Set colors and icons based on type
+            let backgroundColor, icon, textColor = '#fff';
+            switch (type) {
+                case 'success':
+                    backgroundColor = 'rgba(76, 175, 80, 0.95)';
+                    icon = '✅';
+                    break;
+                case 'error':
+                    backgroundColor = 'rgba(244, 67, 54, 0.95)';
+                    icon = '❌';
+                    break;
+                case 'warning':
+                    backgroundColor = 'rgba(255, 152, 0, 0.95)';
+                    icon = '⚠️';
+                    break;
+                case 'info':
+                default:
+                    backgroundColor = 'rgba(33, 150, 243, 0.95)';
+                    icon = 'ℹ️';
+                    break;
             }
             
-            // Show notification
-            notification.style.opacity = '1';
+            notification.style.cssText = `
+                background: ${backgroundColor};
+                color: ${textColor};
+                padding: 1rem 1.5rem;
+                border-radius: 12px;
+                font-family: 'Orbitron', monospace;
+                font-weight: 600;
+                font-size: 0.95rem;
+                margin-bottom: 10px;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                backdrop-filter: blur(10px);
+                transform: translateX(100%);
+                transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+                pointer-events: auto;
+                cursor: pointer;
+                max-width: 350px;
+                word-wrap: break-word;
+            `;
             
-            // Hide after 2 seconds
+            notification.innerHTML = `${icon} ${message}`;
+            
+            // Add click to dismiss
+            notification.addEventListener('click', () => {
+                dismissNotification(notification);
+            });
+            
+            notificationContainer.appendChild(notification);
+            
+            // Animate in
             setTimeout(() => {
-                notification.style.opacity = '0';
-            }, 2000);
+                notification.style.transform = 'translateX(0)';
+            }, 10);
+            
+            // Auto dismiss
+            setTimeout(() => {
+                dismissNotification(notification);
+            }, duration);
         }
+        
+        function dismissNotification(notification) {
+            if (notification && notification.parentNode) {
+                notification.style.transform = 'translateX(100%)';
+                notification.style.opacity = '0';
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 400);
+            }
+        }
+        
+        function showSaveNotification() {
+            showNotification('Progress Saved', 'success', 2000);
+        }
+        
+        // Update player score and streak
+        function updatePlayerScore(score, challengeType) {
+            // Update total score
+            playerData.totalScore += score;
+            
+            // Update best score for this challenge
+            if (score > playerData.challenges[challengeType].best) {
+                playerData.challenges[challengeType].best = score;
+            }
+            
+            // Mark challenge as completed
+            playerData.challenges[challengeType].completed = true;
+            
+            // Update streak
+            updateStreak(challengeType);
+            
+            // Update UI
+            updateChallengeStats();
+            refreshDashboardStats();
+        }
+        
+        // Update streak system
+        function updateStreak(challengeType) {
+            console.log('=== UPDATE STREAK ===');
+            console.log('Challenge type:', challengeType);
+            console.log('Current streak data:', playerData.streak);
+            
+            const today = new Date().toDateString();
+            console.log('Today:', today);
+            
+            // Mark today's challenge as completed
+            playerData.streak.todayCompleted[challengeType] = true;
+            console.log('Marked as completed:', challengeType);
+            console.log('Today completed:', playerData.streak.todayCompleted);
+            
+            // Update streak icon
+            const iconElement = document.getElementById(`streak-${challengeType}`);
+            console.log('Icon element:', iconElement);
+            if (iconElement) {
+                iconElement.style.opacity = '1';
+                iconElement.style.transform = 'scale(1.2)';
+                iconElement.style.filter = 'drop-shadow(0 0 10px rgba(255, 215, 0, 0.8))';
+                console.log('✅ Icon updated');
+            } else {
+                console.error('❌ Icon element not found!');
+            }
+            
+            // Check if all challenges completed today
+            const allCompleted = playerData.streak.todayCompleted.heritage && 
+                                 playerData.streak.todayCompleted.innovation && 
+                                 playerData.streak.todayCompleted.future;
+            console.log('All completed?', allCompleted);
+            console.log('Heritage:', playerData.streak.todayCompleted.heritage);
+            console.log('Innovation:', playerData.streak.todayCompleted.innovation);
+            console.log('Future:', playerData.streak.todayCompleted.future);
+            
+            if (allCompleted) {
+                // Check if this is a new day
+                console.log('Last completed date:', playerData.streak.lastCompletedDate);
+                console.log('Today:', today);
+                console.log('Are they different?', playerData.streak.lastCompletedDate !== today);
+                
+                if (playerData.streak.lastCompletedDate !== today) {
+                    playerData.streak.current++;
+                    playerData.streak.lastCompletedDate = today;
+                    
+                    // Update longest streak
+                    if (playerData.streak.current > playerData.streak.longest) {
+                        playerData.streak.longest = playerData.streak.current;
+                    }
+                    
+                    console.log('🔥 Streak increased to:', playerData.streak.current);
+                    
+                    // Save immediately
+                    autoSaveProgress();
+                    
+                    // Show streak notification with more details
+                    playSound('success');
+                    setTimeout(() => {
+                        showNotification(`🔥 DAILY STREAK COMPLETE! All 3 challenges completed today! Current Streak: ${playerData.streak.current} day${playerData.streak.current > 1 ? 's' : ''}, Longest: ${playerData.streak.longest} day${playerData.streak.longest > 1 ? 's' : ''}. Keep it up! 💪`, 'success', 8000);
+                    }, 500);
+                } else {
+                    console.log('ℹ️ All challenges already completed today');
+                }
+            } else {
+                console.log('ℹ️ Not all challenges completed yet');
+                const remaining = [];
+                if (!playerData.streak.todayCompleted.heritage) remaining.push('Heritage');
+                if (!playerData.streak.todayCompleted.innovation) remaining.push('Innovation');
+                if (!playerData.streak.todayCompleted.future) remaining.push('Engineering');
+                console.log('Remaining challenges:', remaining.join(', '));
+            }
+            
+            // Update streak display
+            document.getElementById('current-streak').textContent = playerData.streak.current;
+            document.getElementById('longest-streak').textContent = playerData.streak.longest;
+            document.getElementById('streak-saves').textContent = playerData.streak.streakSaves || 0;
+            
+            console.log('=== STREAK UPDATE COMPLETE ===');
+        }
+        
+        // Check and update streak icons on dashboard load
+        function updateStreakIcons() {
+            const icons = {
+                heritage: document.getElementById('streak-heritage'),
+                innovation: document.getElementById('streak-innovation'),
+                future: document.getElementById('streak-future')
+            };
+            
+            // Update each icon based on completion status
+            Object.keys(icons).forEach(type => {
+                const icon = icons[type];
+                if (icon && playerData.streak && playerData.streak.todayCompleted) {
+                    if (playerData.streak.todayCompleted[type]) {
+                        icon.style.opacity = '1';
+                        icon.style.transform = 'scale(1.2)';
+                        icon.style.filter = 'drop-shadow(0 0 10px rgba(255, 215, 0, 0.8))';
+                    } else {
+                        icon.style.opacity = '0.3';
+                        icon.style.transform = 'scale(1)';
+                        icon.style.filter = 'none';
+                    }
+                }
+            });
+        }
+        
+        // TEST FUNCTION - Call from console to test streak
+        window.testStreak = function(challengeType) {
+            console.log('🧪 TESTING STREAK FOR:', challengeType);
+            updatePlayerScore(100, challengeType);
+        };
+        
+        // TEST FUNCTION - Reset today's completions
+        window.resetTodayCompletions = function() {
+            console.log('🔄 Resetting today\'s completions');
+            playerData.streak.todayCompleted = {
+                heritage: false,
+                innovation: false,
+                future: false
+            };
+            updateStreakIcons();
+            autoSaveProgress();
+            console.log('✅ Reset complete');
+        };
         
         // Challenge Management - removed function, using event listeners only
         
+        let timerElements = {};
         function startTimer(type, seconds) {
+            // Clear existing timer
+            if (challengeTimer) {
+                clearInterval(challengeTimer);
+            }
+            
             let timeLeft = seconds;
-            challengeTimer = setInterval(() => {
+            let lastTickTime = 0;
+            
+            // Cache timer element
+            if (!timerElements[type]) {
+                timerElements[type] = document.getElementById(`${type}-timer`);
+            }
+            
+            const updateTimer = () => {
                 const minutes = Math.floor(timeLeft / 60);
                 const secs = timeLeft % 60;
-                document.getElementById(`${type}-timer`).textContent = 
-                    `${minutes}:${secs.toString().padStart(2, '0')}`;
+                const timerEl = timerElements[type];
                 
-                // Play tick sound when time is running low
-                if (timeLeft <= 10 && timeLeft > 0) {
+                if (timerEl) {
+                    timerEl.textContent = `${minutes}:${secs.toString().padStart(2, '0')}`;
+                }
+                
+                // Play tick sound when time is running low (throttled)
+                if (timeLeft <= 10 && timeLeft > 0 && timeLeft !== lastTickTime) {
                     playSound('tick');
+                    lastTickTime = timeLeft;
                 }
                 
                 timeLeft--;
@@ -4281,11 +6090,14 @@
                         endHeritageSpeedRun();
                     } else {
                         playSound('error');
-                        alert(`Time's up! ${getDifficultyMessage()}`);
+                        showNotification(`Time's up! ${getDifficultyMessage()}`, 'warning', 5000);
                         returnToDashboard();
                     }
                 }
-            }, 1000);
+            };
+            
+            updateTimer(); // Update immediately
+            challengeTimer = setInterval(updateTimer, 1000);
         }
         
         function endHeritageSpeedRun() {
@@ -4299,11 +6111,10 @@
             updatePlayerScore(heritageSpeedRun.totalScore, 'heritage');
             
             // Show results
-            alert(`⚡ Speed Run Complete!\n\n` +
-                  `Patterns Completed: ${heritageSpeedRun.patternsCompleted}\n` +
-                  `Total Score: ${heritageSpeedRun.totalScore}\n` +
-                  `Average per Pattern: ${heritageSpeedRun.patternsCompleted > 0 ? Math.floor(heritageSpeedRun.totalScore / heritageSpeedRun.patternsCompleted) : 0}\n\n` +
-                  `Coins Earned: ${coinsEarned} 🪙`);
+            showNotification(`⚡ Speed Run Complete! Patterns: ${heritageSpeedRun.patternsCompleted}, Score: ${heritageSpeedRun.totalScore}, Average: ${heritageSpeedRun.patternsCompleted > 0 ? Math.floor(heritageSpeedRun.totalScore / heritageSpeedRun.patternsCompleted) : 0}, Coins Earned: ${coinsEarned} 🪙`, 'success', 6000);
+            
+            // Show historical summary
+            showHistoricalSummary();
             
             autoSaveProgress();
             returnToDashboard();
@@ -4319,9 +6130,6 @@
         }
         
         // Heritage Challenge with Video
-        let heritageVideoTimer = null;
-        let heritageSceneIndex = 1;
-        
         function initHeritageChallenge() {
             // Show video first
             document.getElementById('heritage-video').style.display = 'block';
@@ -4332,38 +6140,62 @@
         }
         
         function startHeritageVideo() {
-            let timeLeft = 20; // Increased from 10 to 20 seconds
+            // Clear any existing timer
+            if (heritageVideoTimer) {
+                clearInterval(heritageVideoTimer);
+            }
+            
+            let timeLeft = 20;
             heritageSceneIndex = 1;
+            heritageVideoPaused = false;
             
             const timerElement = document.getElementById('heritage-video-timer');
             const progressElement = document.getElementById('heritage-video-progress');
             
-            heritageVideoTimer = setInterval(() => {
-                // Skip if paused
+            console.log('Starting heritage video...');
+            
+            if (!timerElement || !progressElement) {
+                console.error('Video elements not found!');
+                return;
+            }
+            
+            // Use requestAnimationFrame for smoother updates
+            let lastUpdate = Date.now();
+            
+            function updateVideo() {
                 if (heritageVideoPaused) {
+                    heritageVideoTimer = requestAnimationFrame(updateVideo);
                     return;
                 }
                 
-                const minutes = Math.floor(timeLeft / 60);
-                const seconds = timeLeft % 60;
-                timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                
-                const progress = ((20 - timeLeft) / 20) * 100;
-                progressElement.style.width = progress + '%';
-                
-                // Change scenes every 6.6 seconds (3 scenes in 20 seconds)
-                const sceneTime = Math.floor((20 - timeLeft) / 6.6) + 1;
-                if (sceneTime !== heritageSceneIndex && sceneTime <= 3) {
-                    changeHeritageScene(sceneTime);
+                const now = Date.now();
+                if (now - lastUpdate >= 1000) {
+                    const minutes = Math.floor(timeLeft / 60);
+                    const seconds = timeLeft % 60;
+                    timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                    
+                    const progress = ((20 - timeLeft) / 20) * 100;
+                    progressElement.style.width = progress + '%';
+                    
+                    // Change scenes every 6.6 seconds (3 scenes in 20 seconds)
+                    const sceneTime = Math.floor((20 - timeLeft) / 6.6) + 1;
+                    if (sceneTime !== heritageSceneIndex && sceneTime <= 3) {
+                        changeHeritageScene(sceneTime);
+                    }
+                    
+                    timeLeft--;
+                    lastUpdate = now;
+                    
+                    if (timeLeft < 0) {
+                        startHeritageChallenge();
+                        return;
+                    }
                 }
                 
-                timeLeft--;
-                
-                if (timeLeft < 0) {
-                    clearInterval(heritageVideoTimer);
-                    startHeritageChallenge();
-                }
-            }, 1000);
+                heritageVideoTimer = requestAnimationFrame(updateVideo);
+            }
+            
+            heritageVideoTimer = requestAnimationFrame(updateVideo);
         }
         
         function changeHeritageScene(sceneNumber) {
@@ -4372,11 +6204,11 @@
             document.getElementById(`heritage-scene-${heritageSceneIndex}`).classList.add('active');
         }
         
-        let heritageVideoPaused = false;
         let savedHeritageTime = 0;
         
         function previousHeritageScene() {
-            console.log('Previous clicked, current scene:', heritageSceneIndex);
+            console.log('⏮️ Previous button clicked!');
+            console.log('Current scene:', heritageSceneIndex);
             playSound('click');
             if (heritageSceneIndex > 1) {
                 const currentScene = document.getElementById(`heritage-scene-${heritageSceneIndex}`);
@@ -4435,6 +6267,7 @@
         }
         
         function startHeritageChallenge() {
+            console.log('🎯 Start Challenge button clicked!');
             document.getElementById('heritage-video').style.display = 'none';
             document.getElementById('heritage-game').style.display = 'block';
             
@@ -4460,16 +6293,23 @@
         function loadNextPattern() {
             // Get available patterns for current level
             const levelPatterns = heritagePatterns[playerData.level];
-            const availablePatterns = levelPatterns.filter((p, i) => !heritageSpeedRun.usedPatterns.includes(i));
+            let availablePatterns = levelPatterns.filter((p, i) => !heritageSpeedRun.usedPatterns.includes(i));
             
-            // If all patterns used, reset
+            // If all patterns used, reset but keep the last pattern to avoid immediate repetition
             if (availablePatterns.length === 0) {
+                const lastPatternIndex = heritageSpeedRun.usedPatterns[heritageSpeedRun.usedPatterns.length - 1];
                 heritageSpeedRun.usedPatterns = [];
-                loadNextPattern();
-                return;
+                
+                // If there are multiple patterns, exclude the last one to prevent immediate repetition
+                if (levelPatterns.length > 1) {
+                    heritageSpeedRun.usedPatterns.push(lastPatternIndex);
+                    availablePatterns = levelPatterns.filter((p, i) => i !== lastPatternIndex);
+                } else {
+                    availablePatterns = levelPatterns;
+                }
             }
             
-            // Pick random pattern
+            // Pick random pattern from available ones
             const randomIndex = Math.floor(Math.random() * availablePatterns.length);
             currentPattern = availablePatterns[randomIndex];
             const patternIndex = levelPatterns.indexOf(currentPattern);
@@ -4478,27 +6318,17 @@
             // Reset player pattern
             playerPattern = [];
             
-            // Update UI
-            document.getElementById('pattern-name').textContent = currentPattern.name;
-            document.getElementById('pattern-points').textContent = currentPattern.points;
+            // Cache DOM elements for better performance
+            const patternNameEl = document.getElementById('pattern-name');
+            const patternPointsEl = document.getElementById('pattern-points');
+            const patternProgressEl = document.getElementById('pattern-progress');
             
-            // Update difficulty display
-            const stars = {
-                apprentice: "★★☆☆☆",
-                artisan: "★★★☆☆", 
-                master: "★★★★★"
-            };
-            const patternInfo = document.querySelector('.pattern-info');
-            if (patternInfo) {
-                const progressP = patternInfo.querySelector('p:first-of-type');
-                if (progressP) {
-                    progressP.innerHTML = `<strong>Points:</strong> <span id="pattern-points">${currentPattern.points}</span> | <strong>Progress:</strong> <span id="pattern-progress">0/${currentPattern.pattern.length}</span>`;
-                }
-                const difficultyP = patternInfo.querySelector('p:last-of-type');
-                if (difficultyP) {
-                    difficultyP.innerHTML = `<strong>Difficulty:</strong> ${stars[playerData.level]}`;
-                }
-            }
+            // Update UI efficiently
+            if (patternNameEl) patternNameEl.textContent = currentPattern.name;
+            if (patternPointsEl) patternPointsEl.textContent = currentPattern.points;
+            
+            // Update pattern info with historical context
+            updatePatternInfo(currentPattern);
             
             // Update speed run stats
             updateSpeedRunStats();
@@ -4507,65 +6337,193 @@
             createTargetGrid();
             createPlayerGrid();
             updatePatternProgress();
+            
+            // Show pattern info notification with historical context
+            showNotification(`${currentPattern.name} (${currentPattern.culture}, ${currentPattern.period})`, 'info', 4000);
         }
         
         function updateSpeedRunStats() {
-            document.getElementById('patterns-completed').textContent = heritageSpeedRun.patternsCompleted;
-            document.getElementById('total-speedrun-score').textContent = heritageSpeedRun.totalScore;
+            const patternsCompletedEl = document.getElementById('patterns-completed');
+            const totalScoreEl = document.getElementById('total-speedrun-score');
+            
+            if (patternsCompletedEl) patternsCompletedEl.textContent = heritageSpeedRun.patternsCompleted;
+            if (totalScoreEl) totalScoreEl.textContent = heritageSpeedRun.totalScore;
+            
+            // Show pattern progress info
+            const totalPatterns = heritagePatterns[playerData.level].length;
+            const remainingPatterns = totalPatterns - heritageSpeedRun.usedPatterns.length;
+            
+            console.log(`📊 Pattern Progress: ${heritageSpeedRun.usedPatterns.length}/${totalPatterns} used, ${remainingPatterns} remaining`);
+        }
+        
+        function updatePatternInfo(pattern) {
+            // Update pattern information display
+            const patternInfo = document.querySelector('.pattern-info');
+            if (patternInfo) {
+                // Update the existing pattern info structure
+                const progressP = patternInfo.querySelector('p:first-of-type');
+                if (progressP) {
+                    progressP.innerHTML = `<strong>Points:</strong> <span id="pattern-points">${pattern.points}</span> | <strong>Progress:</strong> <span id="pattern-progress">0/${pattern.pattern.length}</span>`;
+                }
+                
+                // Add or update historical information
+                let historyP = patternInfo.querySelector('.pattern-history');
+                if (!historyP) {
+                    historyP = document.createElement('p');
+                    historyP.className = 'pattern-history';
+                    historyP.style.cssText = `
+                        color: #a0a0a0; 
+                        font-size: 0.85rem; 
+                        margin-top: 1rem; 
+                        line-height: 1.4;
+                        background: rgba(255,255,255,0.05);
+                        padding: 0.8rem;
+                        border-radius: 8px;
+                        border-left: 3px solid #00d4ff;
+                    `;
+                    patternInfo.appendChild(historyP);
+                }
+                
+                historyP.innerHTML = `
+                    <strong style="color: #00d4ff;">📜 ${pattern.culture} (${pattern.period})</strong><br>
+                    ${pattern.history}
+                `;
+            }
+            
+            console.log(`🏛️ Historical Pattern: ${pattern.name} from ${pattern.culture} (${pattern.period})`);
+        }
+        
+        function showHistoricalAchievement(pattern, isPerfect = true) {
+            const achievementType = isPerfect ? 'mastered' : 'learned';
+            const message = `🏛️ You ${achievementType} the ${pattern.name}! This ancient pattern from ${pattern.culture} (${pattern.period}) represents a significant piece of textile history.`;
+            
+            showNotification(message, isPerfect ? 'success' : 'info', 6000);
+            
+            // Log detailed historical information
+            console.log(`🎓 Historical Achievement: ${pattern.name}`);
+            console.log(`📚 Culture: ${pattern.culture}`);
+            console.log(`📅 Period: ${pattern.period}`);
+            console.log(`📜 History: ${pattern.history}`);
+        }
+        
+        function showHistoricalSummary() {
+            const levelPatterns = heritagePatterns[playerData.level];
+            const completedPatterns = heritageSpeedRun.usedPatterns.map(index => levelPatterns[index]);
+            
+            if (completedPatterns.length > 0) {
+                const cultures = [...new Set(completedPatterns.map(p => p.culture))];
+                const periods = completedPatterns.map(p => p.period).join(', ');
+                
+                const summaryMessage = `🏛️ Heritage Journey Complete! You explored ${completedPatterns.length} ancient patterns from ${cultures.length} different cultures: ${cultures.join(', ')}. Each pattern carries thousands of years of human creativity and cultural significance.`;
+                
+                setTimeout(() => {
+                    showNotification(summaryMessage, 'info', 8000);
+                }, 2000);
+                
+                console.log(`🎓 Heritage Challenge Summary:`);
+                console.log(`📊 Patterns Completed: ${completedPatterns.length}`);
+                console.log(`🌍 Cultures Explored: ${cultures.join(', ')}`);
+                completedPatterns.forEach(pattern => {
+                    console.log(`  • ${pattern.name} (${pattern.culture}, ${pattern.period})`);
+                });
+            }
         }
         
         function createTargetGrid() {
             const grid = document.getElementById('target-grid');
-            grid.innerHTML = '';
             
-            // Set grid layout based on difficulty
+            // Only recreate if grid size changed
             const gridSizes = { 9: 3, 16: 4, 25: 5 };
             const cols = gridSizes[currentPattern.gridSize];
-            grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-            grid.style.gap = '2px';
-            grid.style.maxWidth = '300px';
+            const currentCols = grid.style.gridTemplateColumns;
+            const expectedCols = `repeat(${cols}, 1fr)`;
             
-            for (let i = 0; i < currentPattern.gridSize; i++) {
-                const cell = document.createElement('div');
-                cell.className = 'grid-cell';
+            if (currentCols !== expectedCols || grid.children.length !== currentPattern.gridSize) {
+                grid.innerHTML = '';
+                grid.style.gridTemplateColumns = expectedCols;
+                grid.style.gap = '8px';
+                grid.style.maxWidth = '280px';
+                
+                // Create cells with document fragment for better performance
+                const fragment = document.createDocumentFragment();
+                for (let i = 0; i < currentPattern.gridSize; i++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'grid-cell';
+                    cell.dataset.index = i;
+                    fragment.appendChild(cell);
+                }
+                grid.appendChild(fragment);
+            }
+            
+            // Update cell states without recreating
+            const cells = grid.children;
+            for (let i = 0; i < cells.length; i++) {
+                const cell = cells[i];
                 if (currentPattern.pattern.includes(i)) {
                     cell.classList.add('target');
                     cell.innerHTML = '✦';
+                } else {
+                    cell.classList.remove('target');
+                    cell.innerHTML = '';
                 }
-                grid.appendChild(cell);
             }
         }
         
         function createPlayerGrid() {
             const grid = document.getElementById('player-grid');
-            grid.innerHTML = '';
             
-            // Set grid layout based on difficulty
+            // Only recreate if grid size changed
             const gridSizes = { 9: 3, 16: 4, 25: 5 };
             const cols = gridSizes[currentPattern.gridSize];
-            grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-            grid.style.gap = '2px';
-            grid.style.maxWidth = '300px';
+            const currentCols = grid.style.gridTemplateColumns;
+            const expectedCols = `repeat(${cols}, 1fr)`;
             
-            for (let i = 0; i < currentPattern.gridSize; i++) {
-                const cell = document.createElement('div');
-                cell.className = 'grid-cell';
-                cell.dataset.index = i;
-                cell.addEventListener('click', () => togglePatternCell(i));
+            if (currentCols !== expectedCols || grid.children.length !== currentPattern.gridSize) {
+                grid.innerHTML = '';
+                grid.style.gridTemplateColumns = expectedCols;
+                grid.style.gap = '8px';
+                grid.style.maxWidth = '280px';
                 
-                // Master level: no hints!
-                if (playerData.level === 'master') {
-                    cell.style.background = 'rgba(255, 255, 255, 0.05)';
+                // Create cells with document fragment for better performance
+                const fragment = document.createDocumentFragment();
+                for (let i = 0; i < currentPattern.gridSize; i++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'grid-cell';
+                    cell.dataset.index = i;
+                    
+                    // Use event delegation instead of individual listeners
+                    if (playerData.level === 'master') {
+                        cell.style.background = 'rgba(255, 255, 255, 0.05)';
+                    }
+                    
+                    fragment.appendChild(cell);
                 }
+                grid.appendChild(fragment);
                 
-                grid.appendChild(cell);
+                // Add single event listener to grid for delegation
+                grid.removeEventListener('click', handleGridClick);
+                grid.addEventListener('click', handleGridClick);
+            }
+            
+            // Reset cell states
+            const cells = grid.children;
+            for (let i = 0; i < cells.length; i++) {
+                cells[i].classList.remove('selected', 'correct');
+            }
+        }
+        
+        function handleGridClick(event) {
+            const cell = event.target.closest('.grid-cell');
+            if (cell && cell.dataset.index !== undefined) {
+                togglePatternCell(parseInt(cell.dataset.index));
             }
         }
         
         function togglePatternCell(index) {
             playSound('click');
             
-            const cell = document.querySelector(`#player-grid [data-index="${index}"]`);
+            const grid = document.getElementById('player-grid');
+            const cell = grid.children[index];
             
             if (playerPattern.includes(index)) {
                 playerPattern = playerPattern.filter(i => i !== index);
@@ -4578,12 +6536,22 @@
             updatePatternProgress();
         }
         
+        let progressElement = null;
         function updatePatternProgress() {
             const correct = playerPattern.filter(i => currentPattern.pattern.includes(i)).length;
-            document.getElementById('pattern-progress').textContent = `${correct}/${currentPattern.pattern.length}`;
+            if (!progressElement) {
+                progressElement = document.getElementById('pattern-progress');
+            }
+            if (progressElement) {
+                progressElement.textContent = `${correct}/${currentPattern.pattern.length}`;
+            }
         }
         
+        let isCheckingPattern = false;
         function checkHeritagePattern() {
+            if (isCheckingPattern) return; // Prevent rapid clicking
+            isCheckingPattern = true;
+            
             playSound('click');
             
             const sortedPlayer = [...playerPattern].sort((a, b) => a - b);
@@ -4597,21 +6565,27 @@
                 isPerfect = true;
                 playSound('success');
                 
-                // Mark cells as correct
-                document.querySelectorAll('#player-grid .selected').forEach(cell => {
-                    cell.classList.add('correct');
-                });
+                // Mark cells as correct efficiently
+                const grid = document.getElementById('player-grid');
+                const cells = grid.children;
+                for (let i = 0; i < cells.length; i++) {
+                    if (cells[i].classList.contains('selected')) {
+                        cells[i].classList.add('correct');
+                    }
+                }
                 
                 // Update speed run stats
                 heritageSpeedRun.patternsCompleted++;
                 heritageSpeedRun.totalScore += score;
                 
-                // Show quick feedback
+                // Show quick feedback with historical context
                 showQuickFeedback(`✓ Perfect! +${score} pts`);
+                showHistoricalAchievement(currentPattern);
                 
                 // Load next pattern after short delay
                 setTimeout(() => {
                     loadNextPattern();
+                    isCheckingPattern = false;
                 }, 600);
                 
             } else {
@@ -4623,18 +6597,27 @@
                     heritageSpeedRun.patternsCompleted++;
                     heritageSpeedRun.totalScore += score;
                     showQuickFeedback(`Good! ${Math.floor(accuracy * 100)}% - +${score} pts`);
+                    showHistoricalAchievement(currentPattern, false);
                     
                     setTimeout(() => {
                         loadNextPattern();
+                        isCheckingPattern = false;
                     }, 600);
                 } else {
                     playSound('error');
                     showQuickFeedback(`Try again! ${Math.floor(accuracy * 100)}% accuracy`);
+                    isCheckingPattern = false;
                 }
             }
         }
         
+        let feedbackTimeout;
         function showQuickFeedback(message) {
+            // Clear any existing timeout
+            if (feedbackTimeout) {
+                clearTimeout(feedbackTimeout);
+            }
+            
             // Create or update feedback element
             let feedback = document.getElementById('pattern-feedback');
             if (!feedback) {
@@ -4653,16 +6636,17 @@
                     font-weight: 700;
                     z-index: 10000;
                     box-shadow: 0 0 30px rgba(0, 212, 255, 0.6);
-                    animation: feedbackPop 0.6s ease;
+                    opacity: 0;
+                    transition: opacity 0.3s ease;
                 `;
                 document.body.appendChild(feedback);
             }
             
             feedback.textContent = message;
-            feedback.style.display = 'block';
+            feedback.style.opacity = '1';
             
-            setTimeout(() => {
-                feedback.style.display = 'none';
+            feedbackTimeout = setTimeout(() => {
+                feedback.style.opacity = '0';
             }, 500);
         }
         
@@ -4699,12 +6683,8 @@
         }
         
         // Innovation Challenge with Narrative Video
-        let narrativeTimer = null;
-        let currentScene = 1;
-        let videoPaused = false;
-        let currentQuestions = [];
-        
         function initInnovationChallenge() {
+            console.log('🎮 Initializing Innovation Challenge...');
             currentQuestionIndex = 0;
             quizScore = 0;
             quizStreak = 0;
@@ -4717,6 +6697,7 @@
             // Show narrative video for all levels
             document.getElementById('innovation-video').style.display = 'block';
             document.getElementById('quiz-container-main').style.display = 'none';
+            console.log('Starting narrative video...');
             startNarrativeVideo();
         }
         
@@ -4754,7 +6735,12 @@
             // Update scene indicators
             updateSceneIndicators(scenesToShow.length);
             
-            narrativeTimer = setInterval(() => {
+            // Clear existing timer
+            if (narrativeTimer) {
+                clearInterval(narrativeTimer);
+            }
+            
+            const updateNarrativeTimer = () => {
                 if (!videoPaused) {
                     const minutes = Math.floor(timeLeft / 60);
                     const seconds = timeLeft % 60;
@@ -4777,7 +6763,10 @@
                         startQuizAfterVideo();
                     }
                 }
-            }, 1000);
+            };
+            
+            updateNarrativeTimer(); // Update immediately
+            narrativeTimer = setInterval(updateNarrativeTimer, 1000);
         }
         
         function changeSceneByLevel(scenesToShow, sceneIndex) {
@@ -4877,6 +6866,14 @@
             console.log('Question index:', currentQuestionIndex);
             console.log('Total questions:', currentQuestions ? currentQuestions.length : 0);
             
+            // Start the main quiz timer
+            const timers = {
+                apprentice: { heritage: 60, innovation: 240, future: 480 },
+                artisan: { heritage: 60, innovation: 180, future: 360 },
+                master: { heritage: 60, innovation: 120, future: 300 }
+            };
+            startTimer('innovation', timers[playerData.level].innovation);
+            
             updateQuizStats();
             
             console.log('Calling displayQuestion...');
@@ -4889,7 +6886,7 @@
             
             if (!currentQuestions || currentQuestions.length === 0) {
                 console.error('No questions available for level:', playerData.level);
-                alert('Error: No questions available for your difficulty level!');
+                showNotification('Error: No questions available for your difficulty level!', 'error');
                 returnToDashboard();
                 return;
             }
@@ -4928,42 +6925,12 @@
                 console.log(`Added option ${index}:`, option);
             });
             
-            // Start question timer based on difficulty
-            startQuestionTimer(question.time);
             updateQuizStats();
             
             console.log('Question display complete');
         }
         
-        let questionTimer = null;
-        
-        function startQuestionTimer(seconds) {
-            if (questionTimer) clearInterval(questionTimer);
-            
-            let timeLeft = seconds;
-            const timerElement = document.getElementById('innovation-timer');
-            
-            questionTimer = setInterval(() => {
-                const minutes = Math.floor(timeLeft / 60);
-                const secs = timeLeft % 60;
-                timerElement.textContent = `${minutes}:${secs.toString().padStart(2, '0')}`;
-                
-                timeLeft--;
-                
-                if (timeLeft < 0) {
-                    clearInterval(questionTimer);
-                    // Auto-select wrong answer for timeout
-                    selectAnswer(-1);
-                }
-            }, 1000);
-        }
-        
         function selectAnswer(selectedIndex) {
-            if (questionTimer) {
-                clearInterval(questionTimer);
-                questionTimer = null;
-            }
-            
             const question = currentQuestions[currentQuestionIndex];
             const options = document.querySelectorAll('.quiz-option');
             
@@ -5034,7 +7001,7 @@
             awardCoins(coinsEarned, `Innovation Quiz completed!`);
             
             autoSaveProgress(); // Auto-save after completing quiz
-            alert(`Quiz complete! Final score: ${quizScore} points!\nCoins earned: ${coinsEarned} 🪙`);
+            showNotification(`Quiz complete! Final score: ${quizScore} points! Coins earned: ${coinsEarned} 🪙`, 'success', 5000);
             
             setTimeout(() => {
                 returnToDashboard();
@@ -5042,33 +7009,22 @@
         }
         
         // Smart Textile Engineering Challenge
-        let engineeringComposition = {
-            carbon: 0,
-            silver: 0,
-            polymer: 0,
-            cotton: 0
-        };
-        
-        let engineeringResults = {
-            conductivity: 0,
-            weight: 0,
-            durability: 0,
-            cost: 0
-        };
-        
-        let engineeringVideoTimer = null;
-        let engineeringSceneIndex = 1;
-        
         function initFutureChallenge() {
+            console.log('🚀 Initializing Engineering Challenge...');
             // Show video first
             const videoElement = document.getElementById('engineering-video');
             const gameElement = document.getElementById('engineering-game');
             
+            console.log('Video element:', videoElement);
+            console.log('Game element:', gameElement);
+            
             if (videoElement && gameElement) {
                 videoElement.style.display = 'block';
                 gameElement.style.display = 'none';
+                console.log('Starting engineering video...');
                 startEngineeringVideo();
             } else {
+                console.error('Video elements not found!');
                 startEngineeringChallenge();
             }
         }
@@ -5085,7 +7041,12 @@
                 return;
             }
             
-            engineeringVideoTimer = setInterval(() => {
+            // Clear existing timer
+            if (engineeringVideoTimer) {
+                clearInterval(engineeringVideoTimer);
+            }
+            
+            const updateEngineeringTimer = () => {
                 const minutes = Math.floor(timeLeft / 60);
                 const seconds = timeLeft % 60;
                 timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
@@ -5104,7 +7065,10 @@
                     clearInterval(engineeringVideoTimer);
                     startEngineeringChallenge();
                 }
-            }, 1000);
+            };
+            
+            updateEngineeringTimer(); // Update immediately
+            engineeringVideoTimer = setInterval(updateEngineeringTimer, 1000);
         }
         
         function changeEngineeringScene(sceneNumber) {
@@ -5124,6 +7088,26 @@
             startEngineeringChallenge();
         }
         
+        function previousInnovationScene() {
+            console.log('⏮️ Innovation previous clicked');
+        }
+        
+        function nextInnovationScene() {
+            console.log('⏭️ Innovation next clicked');
+        }
+        
+        function previousEngineeringScene() {
+            console.log('⏮️ Engineering previous clicked');
+        }
+        
+        function nextEngineeringScene() {
+            console.log('⏭️ Engineering next clicked');
+        }
+        
+        function pauseEngineeringVideo() {
+            console.log('⏸️ Engineering video pause clicked');
+        }
+        
         function startEngineeringChallenge() {
             const videoElement = document.getElementById('engineering-video');
             const gameElement = document.getElementById('engineering-game');
@@ -5141,6 +7125,14 @@
             document.querySelectorAll('.slider').forEach(slider => {
                 slider.value = 0;
             });
+            
+            // Start the main challenge timer
+            const timers = {
+                apprentice: { heritage: 60, innovation: 240, future: 480 },
+                artisan: { heritage: 60, innovation: 180, future: 360 },
+                master: { heritage: 60, innovation: 120, future: 300 }
+            };
+            startTimer('future', timers[playerData.level].future);
             
             updateComposition();
         }
@@ -5370,7 +7362,7 @@
                 message = `💡 Keep experimenting!\nYou passed ${passedCount}/4 requirements.\nScore: ${score * 10} points!\nCoins earned: ${coinsEarned} 🪙\n\nTip: ${getEngineeringTip()}`;
             }
             
-            alert(message);
+            showNotification(message, 'success', 5000);
             
             setTimeout(() => {
                 returnToDashboard();
@@ -5516,7 +7508,7 @@
             const totalScore = Math.floor((designMetrics.creativity + designMetrics.innovation + designMetrics.functionality) * 2);
             updatePlayerScore(totalScore, 'future');
             
-            alert(`Design submitted! Score: ${totalScore} points!`);
+            showNotification(`Design submitted! Score: ${totalScore} points!`, 'success', 4000);
             
             setTimeout(() => {
                 returnToDashboard();
@@ -5549,12 +7541,22 @@
             }
             playerData.challenges[challenge].completed = true;
             
+            // Mark challenge as completed today for streak
+            if (playerData.streak && playerData.streak.todayCompleted) {
+                playerData.streak.todayCompleted[challenge] = true;
+                console.log('Marked', challenge, 'as completed today');
+                updateStreakProgress();
+            }
+            
             // Improve rank based on difficulty
             const rankImprovement = Math.floor(finalScore / (playerData.level === 'master' ? 25 : 50));
             if (rankImprovement > 0) {
                 playerData.rank = Math.max(1, playerData.rank - rankImprovement);
                 console.log('Rank improved to:', playerData.rank);
             }
+            
+            // Save to database
+            savePlayerData();
             
             // Update ALL stats immediately
             updateChallengeStats();
@@ -5568,27 +7570,43 @@
             // Show difficulty bonus message
             if (multipliers[playerData.level] > 1.0) {
                 setTimeout(() => {
-                    alert(`${playerData.level.toUpperCase()} BONUS! Score multiplied by ${multipliers[playerData.level]}x = ${finalScore} points!`);
+                    showNotification(`${playerData.level.toUpperCase()} BONUS! Score multiplied by ${multipliers[playerData.level]}x = ${finalScore} points!`, 'success', 5000);
                 }, 1000);
             }
         }
         
-        // Live Updates
+        // Live Updates - Optimized
+        let liveStatsInterval, competitionInterval;
+        let livePlayersEl, competitionTimerEl;
+        
         function updateLiveStats() {
-            setInterval(() => {
-                const players = 247 + Math.floor(Math.random() * 20) - 10;
-                document.getElementById('live-players').textContent = Math.max(200, players);
-            }, 5000);
+            // Cache DOM elements
+            livePlayersEl = livePlayersEl || document.getElementById('live-players');
+            competitionTimerEl = competitionTimerEl || document.getElementById('competition-timer');
+            
+            // Clear existing intervals
+            if (liveStatsInterval) clearInterval(liveStatsInterval);
+            if (competitionInterval) clearInterval(competitionInterval);
+            
+            // Update player count less frequently
+            liveStatsInterval = setInterval(() => {
+                if (livePlayersEl) {
+                    const players = 247 + Math.floor(Math.random() * 20) - 10;
+                    livePlayersEl.textContent = Math.max(200, players);
+                }
+            }, 10000); // Reduced frequency to 10 seconds
             
             // Competition timer
             let timeLeft = 5 * 3600 + 23 * 60 + 45;
-            setInterval(() => {
-                const hours = Math.floor(timeLeft / 3600);
-                const minutes = Math.floor((timeLeft % 3600) / 60);
-                const seconds = timeLeft % 60;
-                
-                document.getElementById('competition-timer').textContent = 
-                    `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            competitionInterval = setInterval(() => {
+                if (competitionTimerEl) {
+                    const hours = Math.floor(timeLeft / 3600);
+                    const minutes = Math.floor((timeLeft % 3600) / 60);
+                    const seconds = timeLeft % 60;
+                    
+                    competitionTimerEl.textContent = 
+                        `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                }
                 
                 timeLeft--;
                 if (timeLeft < 0) timeLeft = 24 * 3600;
@@ -5599,6 +7617,9 @@
         document.addEventListener('DOMContentLoaded', function() {
             console.log('DOM loaded');
             
+            // Validate pattern uniqueness
+            validatePatternUniqueness();
+            
             // Auto-login is handled by auth.onAuthStateChanged() above
             
             // Show login form by default
@@ -5606,12 +7627,12 @@
             
             updateLiveStats();
             
-            // Periodic auto-save every 30 seconds
-            setInterval(() => {
+            // Periodic auto-save every 60 seconds (reduced frequency)
+            let autoSaveInterval = setInterval(() => {
                 if (playerData.email && document.getElementById('dashboard').classList.contains('active')) {
                     autoSaveProgress();
                 }
-            }, 30000);
+            }, 60000);
             
             // Add event listeners to challenge cards
             console.log('Adding challenge card event listeners...');
@@ -6249,11 +8270,6 @@
             
             console.log(`Awarded ${amount} coins. Total: ${playerData.coins}`);
         }
-
-        // Test function to give coins (for development)
-        window.giveCoins = function(amount) {
-            awardCoins(amount || 100, 'Test coins');
-        };
 
         // Make awardCoins globally available
         window.awardCoins = awardCoins;
